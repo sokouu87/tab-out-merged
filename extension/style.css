@@ -1250,12 +1250,22 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   border-top: 1px solid rgba(154, 145, 138, 0.1);
 }
 
+.ungrouped-section.has-dupes {
+  border-top: 2px solid var(--accent-amber);
+}
+
+.ungrouped-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
 .ungrouped-label {
   font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 10px;
   font-weight: 500;
 }
 

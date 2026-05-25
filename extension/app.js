@@ -1438,16 +1438,25 @@ function renderTabGroupCard(groupInfo, tabs) {
  * NOT a full domain card — just a labeled chip section.
  */
 function renderUngroupedSection(ungroupedTabs) {
-  const { urlCounts, uniqueTabs } = detectDuplicateTabs(ungroupedTabs);
+  const { urlCounts, uniqueTabs, hasDupes, totalExtras, dupeUrls } = detectDuplicateTabs(ungroupedTabs);
 
   const chips = uniqueTabs.map(tab => {
     const label = cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), '');
     return buildPageChip(tab, label, urlCounts);
   }).join('');
 
+  let dedupBtn = '';
+  if (hasDupes) {
+    const enc = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
+    dedupBtn = `<button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${enc}">Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}</button>`;
+  }
+
   return `
-    <div class="ungrouped-section">
-      <div class="ungrouped-label">Not grouped</div>
+    <div class="ungrouped-section${hasDupes ? ' has-dupes' : ''}">
+      <div class="ungrouped-header">
+        <div class="ungrouped-label">Not grouped</div>
+        ${dedupBtn}
+      </div>
       <div class="ungrouped-chips">${chips}</div>
     </div>`;
 }
@@ -1546,6 +1555,7 @@ document.addEventListener('click', async (e) => {
   }
 
   const card = actionEl.closest('.mission-card');
+  const ungroupedSection = actionEl.closest('.ungrouped-section');
 
   // ---- Expand overflow chips ("+N more") ----
   if (action === 'expand-chips') {
@@ -1756,6 +1766,15 @@ document.addEventListener('click', async (e) => {
       });
       card.classList.remove('has-amber-bar');
       card.classList.add('has-neutral-bar');
+    }
+
+    if (ungroupedSection) {
+      ungroupedSection.querySelectorAll('.chip-dupe-badge').forEach(b => {
+        b.style.transition = 'opacity 0.2s';
+        b.style.opacity = '0';
+        setTimeout(() => b.remove(), 200);
+      });
+      ungroupedSection.classList.remove('has-dupes');
     }
 
     showToast('Closed duplicates, kept one copy each');
