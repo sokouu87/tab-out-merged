@@ -27,7 +27,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   background: var(--paper);
   color: var(--ink);
   min-height: 100vh;
@@ -74,7 +74,7 @@ header {
 }
 
 .header-left h1 {
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-weight: 300;
   font-size: 28px;
   letter-spacing: -0.5px;
@@ -136,7 +136,7 @@ header {
 }
 
 .tab-cleanup-btn {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 12px;
   font-weight: 600;
   padding: 8px 20px;
@@ -180,7 +180,7 @@ header {
 }
 
 .system-memory-title-row h2 {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-weight: 500;
   font-size: 10px;
   font-style: normal;
@@ -231,7 +231,7 @@ header {
 }
 
 .system-memory-value {
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-size: 17px;
   font-weight: 300;
   color: var(--ink);
@@ -308,7 +308,7 @@ header {
 }
 
 .section-header h2 {
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-weight: 400;
   font-size: 18px;
   font-style: italic;
@@ -692,7 +692,7 @@ header {
 
 .mission-page-count {
   font-size: 20px;
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-weight: 300;
   color: var(--ink);
   line-height: 1;
@@ -714,7 +714,7 @@ header {
 
 .action-btn {
   font-size: 11px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-weight: 500;
   padding: 5px 14px;
   border-radius: 4px;
@@ -789,7 +789,7 @@ header {
   transform: translateX(-50%) translateY(80px);
   background: var(--ink);
   color: var(--paper);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 13px;
   font-weight: 500;
   padding: 12px 24px;
@@ -835,7 +835,7 @@ footer {
 }
 
 .stat-num {
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-size: 28px;
   font-weight: 300;
   color: var(--ink);
@@ -857,7 +857,7 @@ footer {
 }
 
 .refresh-btn {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 11px;
   font-weight: 500;
   color: var(--accent-amber);
@@ -966,7 +966,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .empty-title {
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-size: 20px;
   font-weight: 400;
   font-style: italic;
@@ -1050,7 +1050,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 /* "Update now" button — small, filled, sage green */
 .update-banner-btn {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 12px;
   font-weight: 500;
   color: #fff;
@@ -1279,7 +1279,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .archive-toggle {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
@@ -1320,7 +1320,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .archive-search {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 12px;
   width: 100%;
   padding: 8px 12px;
@@ -1532,7 +1532,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .settings-header h2 {
-  font-family: 'Newsreader', serif;
+  font-family: 'MiSans', 'Newsreader', serif;
   font-weight: 400;
   font-size: 18px;
   font-style: italic;
@@ -1577,7 +1577,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 .settings-input,
 .settings-textarea {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   font-size: 13px;
   padding: 8px 12px;
   border: 1px solid var(--warm-gray);
@@ -1681,7 +1681,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   background: var(--card-bg);
   color: var(--ink);
   font-size: 12px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   text-decoration: none;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
@@ -1723,7 +1723,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   background: var(--card-bg);
   color: var(--muted);
   font-size: 12px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'MiSans', 'DM Sans', sans-serif;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
