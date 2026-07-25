@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Out State Color System</title>
+  <style>
+    :root {
+      --ink: #1a1613;
+      --paper: #f8f5f0;
+      --card-bg: #fffdf9;
+      --warm-gray: #e8e2da;
+      --muted: #9a918a;
+      --shadow: rgba(26, 22, 19, 0.08);
+
+      --live: #2f7d4c;
+      --frozen: #6e77a8;
+      --sleeping: #a9a19a;
+      --freed-accent: #12879a;
+
+      --frozen-bg: rgba(110, 119, 168, 0.075);
+      --sleeping-bg: rgba(169, 161, 154, 0.11);
+      --freed-bg: rgba(18, 135, 154, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 28px 72px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 22px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--warm-gray);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 34px;
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+
+    .subhead {
+      max-width: 720px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .recommendation {
+      border: 1px solid rgba(18, 135, 154, 0.24);
+      background: var(--freed-bg);
+      color: #126f7e;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .section-title {
+      margin: 30px 0 14px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .definition-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .definition-card,
+    .card {
+      border: 1px solid var(--warm-gray);
+      border-radius: 8px;
+      background: var(--card-bg);
+      box-shadow: 0 10px 30px var(--shadow);
+    }
+
+    .definition-card {
+      padding: 16px 18px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: #5b534d;
+    }
+
+    .definition-card strong {
+      color: var(--ink);
+    }
+
+    .state-system {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(170px, 1fr));
+      gap: 12px;
+    }
+
+    .state-card {
+      border: 1px solid var(--warm-gray);
+      border-radius: 8px;
+      background: var(--card-bg);
+      box-shadow: 0 10px 30px var(--shadow);
+      overflow: hidden;
+    }
+
+    .state-color {
+      height: 82px;
+    }
+
+    .state-body {
+      padding: 12px;
+    }
+
+    .state-name {
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .state-meaning {
+      min-height: 42px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+
+    .hex {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .card {
+      padding: 16px 18px 14px;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .badge {
+      border-radius: 4px;
+      padding: 3px 7px;
+      color: #b85d2a;
+      background: rgba(200, 113, 58, 0.08);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .tab-row {
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 4px;
+      border-bottom: 1px solid rgba(154, 145, 138, 0.12);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .tab-row:last-child {
+      border-bottom: none;
+    }
+
+    .tab-row.frozen {
+      background: var(--frozen-bg);
+      border-radius: 5px;
+      border-bottom-color: transparent;
+      padding-left: 7px;
+      padding-right: 7px;
+    }
+
+    .tab-row.sleeping {
+      background: var(--sleeping-bg);
+      border-radius: 5px;
+      border-bottom-color: transparent;
+      padding-left: 7px;
+      padding-right: 7px;
+    }
+
+    .tab-row.freed {
+      background: var(--freed-bg);
+      border-radius: 5px;
+      border-bottom-color: transparent;
+      padding-left: 7px;
+      padding-right: 7px;
+    }
+
+    .state-stack {
+      width: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .favicon {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      background: linear-gradient(135deg, #25324a, #7aa596);
+    }
+
+    .state-bar {
+      width: 14px;
+      height: 3px;
+      border-radius: 999px;
+      box-shadow: 0 1px 2px rgba(64, 56, 48, 0.12);
+    }
+
+    .bar-live {
+      background: var(--live);
+    }
+
+    .bar-frozen {
+      background: var(--frozen);
+      box-shadow: 0 0 0 2px rgba(110, 119, 168, 0.14);
+    }
+
+    .bar-sleeping {
+      background: var(--sleeping);
+    }
+
+    .tab-title {
+      min-width: 0;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .state-label {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .token-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--warm-gray);
+      border-radius: 8px;
+      background: var(--card-bg);
+      box-shadow: 0 10px 30px var(--shadow);
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    .token-table th,
+    .token-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(154, 145, 138, 0.14);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .token-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .token-table th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(232, 226, 218, 0.35);
+    }
+
+    .dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 8px;
+      border-radius: 50%;
+      vertical-align: -1px;
+    }
+
+    .dot.live { background: var(--live); }
+    .dot.frozen { background: var(--frozen); }
+    .dot.sleeping { background: var(--sleeping); }
+    .dot.freed { background: var(--freed-accent); }
+
+    .note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      header {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .definition-grid,
+      .state-system,
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .recommendation {
+        white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <h1>Tab Out State Color System</h1>
+        <div class="subhead">
+          A simplified resource-state model: active and background tabs are both live; freed is feedback for a Tab Out action, not a separate long-term Chrome state.
+        </div>
+      </div>
+      <div class="recommendation">Model: Live / Frozen / Sleeping + Freed feedback</div>
+    </header>
+
+    <div class="section-title">State Model</div>
+    <section class="definition-grid">
+      <div class="definition-card">
+        <strong>Active and background should share one resource state.</strong>
+        Active means selected; background means not selected. Both can still be loaded, run JavaScript, play audio, and hold page state. That makes both <strong>Live</strong>.
+      </div>
+      <div class="definition-card">
+        <strong>Freed is not a new Chrome state.</strong>
+        Freed means <strong>Sleeping + just acted by Tab Out</strong>. It should be a short-term feedback layer over Sleeping, then collapse back to plain Sleeping.
+      </div>
+    </section>
+
+    <div class="section-title">Production Color System</div>
+    <section class="state-system">
+      <div class="state-card">
+        <div class="state-color" style="background: var(--live)"></div>
+        <div class="state-body">
+          <div class="state-name">Live</div>
+          <div class="state-meaning">Active or background; loaded and potentially working.</div>
+          <div class="hex">#2F7D4C</div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <div class="state-color" style="background: var(--frozen)"></div>
+        <div class="state-body">
+          <div class="state-name">Frozen</div>
+          <div class="state-meaning">Paused by Chrome; content still loaded in memory.</div>
+          <div class="hex">#6E77A8</div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <div class="state-color" style="background: var(--sleeping)"></div>
+        <div class="state-body">
+          <div class="state-name">Sleeping</div>
+          <div class="state-meaning">Discarded by Chrome; reloads when selected.</div>
+          <div class="hex">#A9A19A</div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <div class="state-color" style="background: var(--freed-accent)"></div>
+        <div class="state-body">
+          <div class="state-name">Freed Feedback</div>
+          <div class="state-meaning">A teal row highlight showing Tab Out just put it to sleep.</div>
+          <div class="hex">#12879A</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-title">In Real Tab Rows</div>
+    <section class="cards">
+      <div class="card">
+        <div class="card-title">
+          Fiddl Art
+          <span class="badge">5 tabs open</span>
+        </div>
+        <div class="tab-row">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-live"></span></span>
+          <span class="tab-title">Current AI image prompt library</span>
+          <span class="state-label">active live</span>
+        </div>
+        <div class="tab-row">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-live"></span></span>
+          <span class="tab-title">Reference gallery in the background</span>
+          <span class="state-label">background live</span>
+        </div>
+        <div class="tab-row frozen">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-frozen"></span></span>
+          <span class="tab-title">Paused background editor</span>
+          <span class="state-label">frozen</span>
+        </div>
+        <div class="tab-row sleeping">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-sleeping"></span></span>
+          <span class="tab-title">Already discarded by Chrome</span>
+          <span class="state-label">sleeping</span>
+        </div>
+        <div class="tab-row freed">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-sleeping"></span></span>
+          <span class="tab-title">Just slept by Tab Out</span>
+          <span class="state-label">freed</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          Docs
+          <span class="badge">5 tabs open</span>
+        </div>
+        <div class="tab-row">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-live"></span></span>
+          <span class="tab-title">Current planning document</span>
+          <span class="state-label">active live</span>
+        </div>
+        <div class="tab-row">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-live"></span></span>
+          <span class="tab-title">Product plan draft</span>
+          <span class="state-label">background live</span>
+        </div>
+        <div class="tab-row frozen">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-frozen"></span></span>
+          <span class="tab-title">Paused notes tab</span>
+          <span class="state-label">frozen</span>
+        </div>
+        <div class="tab-row sleeping">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-sleeping"></span></span>
+          <span class="tab-title">Old research doc discarded by Chrome</span>
+          <span class="state-label">sleeping</span>
+        </div>
+        <div class="tab-row freed">
+          <span class="state-stack"><span class="favicon"></span><span class="state-bar bar-sleeping"></span></span>
+          <span class="tab-title">Meeting notes slept by Tab Out</span>
+          <span class="state-label">freed</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-title">Token Mapping</div>
+    <table class="token-table">
+      <thead>
+        <tr>
+          <th>UI State</th>
+          <th>Token</th>
+          <th>Meaning</th>
+          <th>How It Renders</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="dot live"></span>Live</td>
+          <td><span class="hex">--status-live: #2F7D4C</span></td>
+          <td>Active or background; still live.</td>
+          <td>Green state bar. Active/background can differ in tooltip text, not color.</td>
+        </tr>
+        <tr>
+          <td><span class="dot frozen"></span>Frozen</td>
+          <td><span class="hex">--status-frozen: #6E77A8</span></td>
+          <td>Paused but still loaded.</td>
+          <td>Blue-violet state bar and subtle row background.</td>
+        </tr>
+        <tr>
+          <td><span class="dot sleeping"></span>Sleeping</td>
+          <td><span class="hex">--status-sleeping: #A9A19A</span></td>
+          <td>Discarded; reloads on selection.</td>
+          <td>Taupe state bar and quiet row background.</td>
+        </tr>
+        <tr>
+          <td><span class="dot freed"></span>Freed</td>
+          <td><span class="hex">--status-freed-accent: #12879A</span></td>
+          <td>Sleeping because Tab Out just acted.</td>
+          <td>Same sleeping bar plus teal row feedback.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="note">
+      This keeps the state system honest: resource state is Live/Frozen/Sleeping, while Freed is an action receipt.
+    </p>
+  </main>
+</body>
+</html>

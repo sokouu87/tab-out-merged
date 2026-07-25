@@ -13,7 +13,8 @@ Before doing anything technical, tell the user what they're about to get:
 > Here's what makes it great:
 > - **See all your open tabs at a glance** grouped by domain on a grid
 > - **Homepages group** pulls Gmail, X, LinkedIn, YouTube, GitHub homepages into one card for easy cleanup
-> - **Close tabs with style** satisfying swoosh sound + confetti burst
+> - **Free memory without closing work** by sleeping eligible inactive tabs
+> - **Close individual tabs with style** satisfying swoosh sound + confetti burst
 > - **Duplicate detection** flags when you have the same page open twice
 > - **Click any tab title to jump to it** even across different Chrome windows
 > - **Save for later** bookmark individual tabs to a checklist before closing them
@@ -79,8 +80,8 @@ Once the extension is loaded:
 > 1. **Your open tabs are grouped by domain** in a grid layout.
 > 2. **Homepages** (Gmail inbox, X home, YouTube, etc.) are in their own group at the top.
 > 3. **Click any tab title** to jump directly to that tab.
-> 4. **Click the X** next to any tab to close just that one (with swoosh + confetti).
-> 5. **Click "Close all N tabs"** on a group to close the whole thing.
+> 4. **Click "Sleep N tabs"** or the global **Sleep inactive tabs** action to free memory without closing tabs.
+> 5. **Click the X** next to any tab to close just that one (with swoosh + confetti).
 > 6. **Duplicate tabs** are flagged with an amber "(2x)" badge. Click "Close duplicates" to keep one copy.
 > 7. **Save a tab for later** by clicking the bookmark icon before closing it. Saved tabs appear in the sidebar.
 >
@@ -90,7 +91,8 @@ Once the extension is loaded:
 
 ## Key Facts
 
-- Tab Out is a pure Chrome extension. No server, no Node.js, no npm.
+- Tab Out runs as a pure Chrome extension. No server or Node.js process is needed to use it.
+- npm is used only for development tests.
 - Saved tabs are stored in `chrome.storage.local` (persists across sessions).
 - 100% local. No data is sent to any external service.
 - To update: `cd tab-out && git pull`, then reload the extension in `chrome://extensions`.

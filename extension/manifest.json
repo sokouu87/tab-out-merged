@@ -1,11 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "Tab Out · by Cearl",
-  "version": "1.1.0",
-  "description": "新标签页变成标签管理中心。按域名分组，支持 Chrome 标签组视图、自定义分组、保护标签等增强功能。",
-  "permissions": ["tabs", "activeTab", "storage", "tabGroups"],
-  "chrome_url_overrides": { "newtab": "index.html" },
-  "background": { "service_worker": "background.js" },
+  "name": "Tab Out",
+  "version": "2.0.0",
+  "description": "Group, protect, sleep, and revisit your open tabs from a private local dashboard.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "tabGroups",
+    "system.memory"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:;"
+  },
   "action": {
     "default_title": "Tab Out",
     "default_icon": {

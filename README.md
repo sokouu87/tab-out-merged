@@ -2,7 +2,9 @@
 
 **Keep tabs on your tabs.**
 
-Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
+Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Sleep inactive tabs to free memory without closing your work, and close individual tabs with a satisfying swoosh + confetti.
+
+![Tab Out dashboard preview](docs/assets/tab-out-dashboard-preview.png)
 
 No server. No account. No external API calls. Just a Chrome extension.
 
@@ -24,14 +26,16 @@ The agent will walk you through it. Takes about 1 minute.
 
 - **See all your tabs at a glance** on a clean grid, grouped by domain
 - **Homepages group** pulls Gmail inbox, X home, YouTube, LinkedIn, GitHub homepages into one card
-- **Close tabs with style** with swoosh sound + confetti burst
+- **Free memory without closing work** by sleeping eligible inactive tabs
+- **Close individual tabs with style** with swoosh sound + confetti burst
 - **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
+- **Tab status indicators** show active/background/sleeping states with compact hoverable bars
 - **Click any tab to jump to it** across windows, no new tab opened
 - **Save for later** bookmark tabs to a checklist before closing them
 - **Localhost grouping** shows port numbers next to each tab so you can tell your vibe coding projects apart
 - **Expandable groups** show the first 8 tabs with a clickable "+N more"
 - **100% local** your data never leaves your machine
-- **Pure Chrome extension** no server, no Node.js, no npm, no setup beyond loading the extension
+- **Pure Chrome extension runtime** no server or Node.js process needed after loading the extension
 
 ---
 
@@ -63,11 +67,12 @@ You open a new tab
   -> Tab Out shows your open tabs grouped by domain
   -> Homepages (Gmail, X, etc.) get their own group at the top
   -> Click any tab title to jump to it
-  -> Close groups you're done with (swoosh + confetti)
+  -> Sleep eligible inactive tabs to free memory without closing them
+  -> Close individual tabs you're done with (swoosh + confetti)
   -> Save tabs for later before closing them
 ```
 
-Everything runs inside the Chrome extension. No external server, no API calls, no data sent anywhere. Saved tabs are stored in `chrome.storage.local`.
+Everything runs inside the Chrome extension. No external server, no API calls, no data sent anywhere. Saved tabs are stored in `chrome.storage.local`. The npm tooling in this repo is only for development tests.
 
 ---
 
@@ -77,8 +82,10 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 |------|-----|
 | Extension | Chrome Manifest V3 |
 | Storage | chrome.storage.local |
+| System memory snapshot | chrome.system.memory |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
+| Tests | Vitest + jsdom + Testing Library |
 
 ---
 
