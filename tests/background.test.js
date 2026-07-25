@@ -9,23 +9,35 @@ async function flushPromises() {
   for (let i = 0; i < 5; i += 1) await Promise.resolve();
 }
 
-async function loadBackgroundWithTabs(initialTabs) {
+const EXTENSION_ORIGIN = 'chrome-extension://test-extension-id';
+const DASHBOARD_URL = `${EXTENSION_ORIGIN}/index.html`;
+
+async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [] } = {}) {
   const listeners = {};
   let tabs = initialTabs;
+  let dashboardTabs = existingDashboardTabs;
   const chrome = {
     runtime: {
       onInstalled: { addListener: vi.fn(listener => { listeners.onInstalled = listener; }) },
       onStartup: { addListener: vi.fn(listener => { listeners.onStartup = listener; }) },
+      getURL: vi.fn(path => `${EXTENSION_ORIGIN}/${path}`),
     },
     tabs: {
-      query: vi.fn(async () => tabs),
+      // A url filter means "find the dashboard"; no filter means "count everything"
+      query: vi.fn(async (queryInfo = {}) => (queryInfo.url ? dashboardTabs : tabs)),
+      create: vi.fn(async () => {}),
+      update: vi.fn(async () => {}),
       onCreated: { addListener: vi.fn(listener => { listeners.onCreated = listener; }) },
       onRemoved: { addListener: vi.fn(listener => { listeners.onRemoved = listener; }) },
       onUpdated: { addListener: vi.fn(listener => { listeners.onUpdated = listener; }) },
     },
+    windows: {
+      update: vi.fn(async () => {}),
+    },
     action: {
       setBadgeText: vi.fn(async () => {}),
       setBadgeBackgroundColor: vi.fn(async () => {}),
+      onClicked: { addListener: vi.fn(listener => { listeners.onClicked = listener; }) },
     },
   };
 
@@ -38,6 +50,9 @@ async function loadBackgroundWithTabs(initialTabs) {
     listeners,
     setTabs(nextTabs) {
       tabs = nextTabs;
+    },
+    setDashboardTabs(nextDashboardTabs) {
+      dashboardTabs = nextDashboardTabs;
     },
   };
 }
@@ -79,5 +94,38 @@ describe('background badge seam', () => {
 
     expect(chrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '' });
     expect(chrome.action.setBadgeBackgroundColor).not.toHaveBeenCalled();
+  });
+});
+
+describe('toolbar action seam', () => {
+  test('registers an onClicked listener so the icon is not inert', async () => {
+    const { chrome } = await loadBackgroundWithTabs([webTab(1)]);
+
+    expect(chrome.action.onClicked.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  test('opens the dashboard by absolute URL when none is open yet', async () => {
+    const harness = await loadBackgroundWithTabs([webTab(1)]);
+
+    harness.listeners.onClicked();
+    await flushPromises();
+
+    // Absolute extension URL, not a blank new tab — the newtab override is not
+    // honoured on every Chromium browser (e.g. Vivaldi keeps its Speed Dial).
+    expect(harness.chrome.tabs.create).toHaveBeenCalledWith({ url: DASHBOARD_URL });
+    expect(harness.chrome.tabs.update).not.toHaveBeenCalled();
+  });
+
+  test('focuses the existing dashboard tab instead of opening a duplicate', async () => {
+    const harness = await loadBackgroundWithTabs([webTab(1)], {
+      existingDashboardTabs: [{ id: 42, windowId: 7, url: DASHBOARD_URL }],
+    });
+
+    harness.listeners.onClicked();
+    await flushPromises();
+
+    expect(harness.chrome.tabs.update).toHaveBeenCalledWith(42, { active: true });
+    expect(harness.chrome.windows.update).toHaveBeenCalledWith(7, { focused: true });
+    expect(harness.chrome.tabs.create).not.toHaveBeenCalled();
   });
 });
