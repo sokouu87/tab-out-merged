@@ -90,8 +90,18 @@ powershell.exe -ExecutionPolicy Bypass -File .\server\install-task.ps1 -Unregist
 4. Subdomain 填 `tab`。
 5. Domain 选 `sokouu.cc`。
 6. Type 选 `HTTP`。
-7. URL 填 `localhost:8787`。
+7. URL 填 **`127.0.0.1:8787`**。**不要填 `localhost:8787`。**
 8. 保存后访问 `https://tab.sokouu.cc`，使用 setup 时输入的用户名和密码登录。
+
+> **为什么必须写 `127.0.0.1` 而不是 `localhost`**
+>
+> Windows 上 `localhost` 同时解析到 IPv6 的 `::1` 和 IPv4 的 `127.0.0.1`，且 `::1` 排在前面。
+> 本服务只监听 `127.0.0.1`（这是有意的安全边界，见下文），所以对 `::1` 的连接会被拒绝。
+> curl 之类的客户端有 Happy Eyeballs 回退，试 `::1` 失败会自动改试 IPv4，看起来一切正常；
+> **cloudflared 不回退**，直接返回 `error code: 502`。
+>
+> 症状是 `https://tab.sokouu.cc` 报 502，但本机 `curl http://localhost:8787` 却 200——
+> 排查时很容易被这个不一致带偏。判据：`curl http://[::1]:8787` 连不上（HTTP 000）就是这个原因。
 
 登录 cookie 有效期为 90 天。Cookie 带 `Secure`，因此完整登录流程应通过 `https://tab.sokouu.cc` 使用；直接访问本机 HTTP 地址只适合服务诊断。
 
