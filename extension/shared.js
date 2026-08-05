@@ -8,7 +8,9 @@
     refreshIntervalSeconds: 30,
     showSystemMemory: false,
     remoteSyncEnabled: false,
-    remoteServerUrl: 'http://localhost:8787',
+    // 用 127.0.0.1 而不是 localhost：Windows 上 localhost 先解析到 IPv6 的 ::1，
+  // 而服务只监听 127.0.0.1，走 localhost 会连不上。
+  remoteServerUrl: 'http://127.0.0.1:8787',
     extensionKey: '',
   });
 

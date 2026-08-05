@@ -14,7 +14,9 @@ const REMOTE_RETRY_MAX_MS = 30_000;
 const FALLBACK_SETTINGS = {
   refreshIntervalSeconds: 30,
   remoteSyncEnabled: false,
-  remoteServerUrl: 'http://localhost:8787',
+  // 与 shared.js 保持一致：localhost 在 Windows 上会先走 IPv6 ::1，连不上只监听
+  // 127.0.0.1 的服务。
+  remoteServerUrl: 'http://127.0.0.1:8787',
   extensionKey: '',
 };
 
