@@ -95,6 +95,22 @@ export async function createTabOutServer({ config, dataDir, now = () => Date.now
       const route = url.pathname;
       const currentTime = now();
 
+      // 会话 cookie 带 Secure，只有 https 连接才会被浏览器保存。走 http 访问时
+      // 登录本身会成功、Set-Cookie 也会下发，但浏览器直接丢弃，页面一 reload
+      // 又退回登录页——看起来像"密码不对"，其实是协议不对。
+      //
+      // 只在经由 Cloudflare 时重定向：X-Forwarded-Proto 由隧道注入，本地直连
+      // 127.0.0.1:8787 没有这个头，不受影响，诊断照常可用。
+      const forwardedProto = request.headers['x-forwarded-proto'];
+      if (forwardedProto && forwardedProto !== 'https') {
+        const host = request.headers['x-forwarded-host'] || request.headers.host;
+        if (host) {
+          response.writeHead(301, { Location: `https://${host}${request.url || '/'}` });
+          response.end();
+          return;
+        }
+      }
+
       if (route === '/api/login' && request.method === 'POST') {
         const ip = getClientIp(request);
         const attempt = loginAttempts.get(ip);

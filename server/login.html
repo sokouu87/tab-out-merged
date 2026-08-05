@@ -28,7 +28,11 @@
     <h1>Tab Out</h1>
     <form id="loginForm">
       <label for="username">用户名</label>
-      <input id="username" name="username" autocomplete="username" required>
+      <!-- autocapitalize/autocorrect 必须关掉：iOS 键盘默认会把首字母大写，
+           把 sokouu 输成 Sokouu，而服务端是字节级比对，登录必然失败。
+           这个问题只在手机上复现，桌面键盘不会触发。 -->
+      <input id="username" name="username" autocomplete="username"
+             autocapitalize="none" autocorrect="off" spellcheck="false" required>
       <label for="password">密码</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
       <button type="submit">登录</button>
@@ -47,7 +51,10 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            username: document.getElementById('username').value,
+            // trim 用户名：手机上从密码管理器粘贴很容易带进首尾空格，
+            // 服务端是字节级比对，一个空格就登录失败。密码不 trim——
+            // 空格可能是密码本身的一部分。
+            username: document.getElementById('username').value.trim(),
             password: document.getElementById('password').value,
           }),
         });
