@@ -7,5 +7,9 @@ docs/superpowers/
 # Personal config (landing page patterns, etc.) — never push to GitHub
 extension/config.local.js
 
+# 本机远程查看器密钥与运行时数据
+server/config.json
+server/data/
+
 # Claude<->Codex bridge (control-plane artifacts, not part of the extension)
 .bridge/

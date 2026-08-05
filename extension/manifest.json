@@ -10,6 +10,9 @@
     "tabGroups",
     "system.memory"
   ],
+  "host_permissions": [
+    "http://localhost:8787/*"
+  ],
   "chrome_url_overrides": {
     "newtab": "index.html"
   },

@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Tab Out</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --bg: #f7f7f5; --card: #fff; --text: #181818; --muted: #777; --line: #e8e8e4;
+      --accent: #247a45; --danger: #b42318; --disabled: #aaa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    main { width: min(100%, 680px); margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 14px max(28px, env(safe-area-inset-bottom)); }
+    .status-line { min-height: 28px; display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--disabled); }
+    .status-dot.online { background: var(--accent); }
+    .status-spacer { flex: 1; }
+    .offline-reason, .error { margin: 4px 0 10px; color: var(--danger); font-size: 12px; }
+    details, section { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+    summary, h2 { min-height: 46px; margin: 0; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; }
+    summary { cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: '›'; margin-left: auto; color: var(--muted); transform: rotate(90deg); transition: transform .15s; }
+    details[open] summary::after { transform: rotate(-90deg); }
+    .count { color: var(--muted); font-size: 12px; font-weight: 500; }
+    .list { border-top: 1px solid var(--line); }
+    .tab-row { min-height: 62px; padding: 9px 10px 9px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); transition: opacity .15s, background .15s; }
+    .tab-row:last-child { border-bottom: 0; }
+    .tab-row.pending { opacity: .55; background: color-mix(in srgb, var(--card) 85%, var(--accent)); }
+    .favicon { width: 22px; height: 22px; flex: 0 0 22px; object-fit: contain; border-radius: 4px; }
+    .favicon-fallback { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; background: var(--line); }
+    .tab-copy { min-width: 0; flex: 1; }
+    .tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; }
+    .tab-domain, .pending-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; line-height: 17px; }
+    .actions { display: flex; gap: 5px; flex: 0 0 auto; }
+    .action { width: 36px; height: 36px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 21px; }
+    .action.close { color: var(--danger); }
+    .action:disabled { color: var(--disabled); opacity: .55; }
+    .empty { padding: 20px 14px; color: var(--muted); font-size: 13px; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f0f0f; --card: #191919; --text: #f1f1f1; --muted: #999; --line: #2d2d2d; --accent: #58b978; --danger: #ff776d; --disabled: #666; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="status-line">
+      <span class="status-dot" id="statusDot"></span>
+      <strong id="statusText">读取中</strong>
+      <span id="lastSync"></span>
+      <span class="status-spacer"></span>
+      <span id="pendingCount"></span>
+    </div>
+    <div class="offline-reason" id="offlineReason" hidden>家里的浏览器当前离线，暂时不能操作。</div>
+    <div class="error" id="error" hidden></div>
+
+    <details id="savedSection">
+      <summary>Saved for later <span class="count" id="savedCount">0</span></summary>
+      <div class="list" id="savedList"></div>
+    </details>
+
+    <section>
+      <h2>Open tabs <span class="count" id="openCount">0</span></h2>
+      <div class="list" id="openList"></div>
+    </section>
+  </main>
+  <script>
+    const pending = new Map();
+    let currentState = { tabs: [], saved: [], lastSyncTs: null, online: false, pendingCount: 0 };
+
+    function relativeTime(timestamp) {
+      if (!timestamp) return '从未同步';
+      const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+      if (seconds < 60) return `${seconds} 秒前`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes} 分钟前`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} 小时前`;
+      return `${Math.floor(hours / 24)} 天前`;
+    }
+
+    function domainOf(url) {
+      try { return new URL(url).hostname.replace(/^www\./, '') || url; } catch { return url || ''; }
+    }
+
+    function safeImageUrl(url) {
+      try {
+        const parsed = new URL(url);
+        return ['http:', 'https:', 'data:'].includes(parsed.protocol) ? url : '';
+      } catch { return ''; }
+    }
+
+    function makeFavicon(tab) {
+      const source = safeImageUrl(tab.favIconUrl);
+      if (!source) {
+        const fallback = document.createElement('span');
+        fallback.className = 'favicon-fallback';
+        return fallback;
+      }
+      const image = document.createElement('img');
+      image.className = 'favicon';
+      image.src = source;
+      image.alt = '';
+      image.addEventListener('error', () => image.replaceWith(Object.assign(document.createElement('span'), { className: 'favicon-fallback' })));
+      return image;
+    }
+
+    function makeCopy(tab, isPending = false) {
+      const copy = document.createElement('div');
+      copy.className = 'tab-copy';
+      const title = document.createElement('div');
+      title.className = 'tab-title';
+      title.textContent = tab.title || tab.url || 'Untitled';
+      const domain = document.createElement('div');
+      domain.className = isPending ? 'pending-label' : 'tab-domain';
+      domain.textContent = isPending ? '处理中…' : domainOf(tab.url);
+      copy.append(title, domain);
+      return copy;
+    }
+
+    function renderSaved() {
+      const items = currentState.saved.filter(item => !item.dismissed && !item.completed);
+      document.getElementById('savedCount').textContent = String(items.length);
+      const list = document.getElementById('savedList');
+      list.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '暂无收藏';
+        list.append(empty);
+        return;
+      }
+      for (const item of items) {
+        const row = document.createElement('div');
+        row.className = 'tab-row';
+        row.append(makeFavicon(item), makeCopy(item));
+        list.append(row);
+      }
+    }
+
+    function renderOpenTabs() {
+      const tabs = [...currentState.tabs].sort((a, b) => (Number(b.firstSeenTs) || 0) - (Number(a.firstSeenTs) || 0));
+      document.getElementById('openCount').textContent = String(tabs.length);
+      const list = document.getElementById('openList');
+      list.replaceChildren();
+      if (!tabs.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '没有打开的标签';
+        list.append(empty);
+        return;
+      }
+
+      for (const tab of tabs) {
+        const isPending = pending.has(tab.id);
+        const row = document.createElement('div');
+        row.className = `tab-row${isPending ? ' pending' : ''}`;
+        row.dataset.tabId = String(tab.id);
+        row.append(makeFavicon(tab), makeCopy(tab, isPending));
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        for (const [type, label, symbol] of [['save', '收藏', '☆'], ['close', '关闭', '×']]) {
+          const button = document.createElement('button');
+          button.className = `action ${type}`;
+          button.type = 'button';
+          button.textContent = symbol;
+          button.setAttribute('aria-label', `${label} ${tab.title || tab.url || ''}`);
+          button.title = currentState.online ? label : '浏览器离线，无法操作';
+          button.disabled = !currentState.online || isPending;
+          button.addEventListener('click', () => submitAction(type, tab));
+          actions.append(button);
+        }
+        row.append(actions);
+        list.append(row);
+      }
+    }
+
+    function renderStatus() {
+      const dot = document.getElementById('statusDot');
+      dot.classList.toggle('online', currentState.online);
+      document.getElementById('statusText').textContent = currentState.online ? '在线' : '离线';
+      document.getElementById('lastSync').textContent = `· ${relativeTime(currentState.lastSyncTs)}`;
+      document.getElementById('pendingCount').textContent = currentState.pendingCount ? `${currentState.pendingCount} 项待处理` : '';
+      document.getElementById('offlineReason').hidden = currentState.online;
+    }
+
+    function render() {
+      renderStatus();
+      renderSaved();
+      renderOpenTabs();
+    }
+
+    function showError(message = '') {
+      const error = document.getElementById('error');
+      error.textContent = message;
+      error.hidden = !message;
+    }
+
+    async function refreshState() {
+      try {
+        const response = await fetch('/api/state', { cache: 'no-store' });
+        if (!response.ok) {
+          if (response.status === 401) location.reload();
+          throw new Error('无法读取远程状态。');
+        }
+        currentState = await response.json();
+        const tabIds = new Set(currentState.tabs.map(tab => tab.id));
+        for (const tabId of pending.keys()) {
+          if (!tabIds.has(tabId)) pending.delete(tabId);
+        }
+        showError('');
+        render();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    async function submitAction(type, tab) {
+      if (!currentState.online || pending.has(tab.id)) return;
+      pending.set(tab.id, type);
+      renderOpenTabs();
+      try {
+        const response = await fetch('/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, tabId: tab.id }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || '操作提交失败。');
+        currentState.pendingCount = body.pendingCount;
+        renderStatus();
+        setTimeout(refreshState, 1000);
+      } catch (error) {
+        pending.delete(tab.id);
+        showError(error.message);
+        renderOpenTabs();
+      }
+    }
+
+    refreshState();
+    setInterval(refreshState, 20_000);
+    setInterval(renderStatus, 1_000);
+    window.addEventListener('focus', refreshState);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshState();
+    });
+  </script>
+</body>
+</html>

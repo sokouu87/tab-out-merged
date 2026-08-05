@@ -6,16 +6,17 @@ import { URL } from 'node:url';
 const backgroundPath = new URL('../extension/background.js', import.meta.url);
 
 async function flushPromises() {
-  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  for (let i = 0; i < 30; i += 1) await Promise.resolve();
 }
 
 const EXTENSION_ORIGIN = 'chrome-extension://test-extension-id';
 const DASHBOARD_URL = `${EXTENSION_ORIGIN}/index.html`;
 
-async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [] } = {}) {
+async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [], initialStorage = {} } = {}) {
   const listeners = {};
   let tabs = initialTabs;
   let dashboardTabs = existingDashboardTabs;
+  const storage = { ...initialStorage };
   const chrome = {
     runtime: {
       onInstalled: { addListener: vi.fn(listener => { listeners.onInstalled = listener; }) },
@@ -27,6 +28,7 @@ async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [] 
       query: vi.fn(async (queryInfo = {}) => (queryInfo.url ? dashboardTabs : tabs)),
       create: vi.fn(async () => {}),
       update: vi.fn(async () => {}),
+      get: vi.fn(async tabId => tabs.find(tab => tab.id === tabId)),
       onCreated: { addListener: vi.fn(listener => { listeners.onCreated = listener; }) },
       onRemoved: { addListener: vi.fn(listener => { listeners.onRemoved = listener; }) },
       onUpdated: { addListener: vi.fn(listener => { listeners.onUpdated = listener; }) },
@@ -39,6 +41,16 @@ async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [] 
       setBadgeBackgroundColor: vi.fn(async () => {}),
       onClicked: { addListener: vi.fn(listener => { listeners.onClicked = listener; }) },
     },
+    storage: {
+      local: {
+        get: vi.fn(async keys => {
+          const names = Array.isArray(keys) ? keys : [keys];
+          return Object.fromEntries(names.map(key => [key, storage[key]]));
+        }),
+        set: vi.fn(async patch => Object.assign(storage, patch)),
+      },
+      onChanged: { addListener: vi.fn(listener => { listeners.onStorageChanged = listener; }) },
+    },
   };
 
   const source = await readFile(backgroundPath, 'utf8');
@@ -48,6 +60,7 @@ async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [] 
   return {
     chrome,
     listeners,
+    storage,
     setTabs(nextTabs) {
       tabs = nextTabs;
     },
@@ -94,6 +107,25 @@ describe('background badge seam', () => {
 
     expect(chrome.action.setBadgeText).toHaveBeenLastCalledWith({ text: '' });
     expect(chrome.action.setBadgeBackgroundColor).not.toHaveBeenCalled();
+  });
+});
+
+describe('tab first-seen tracking', () => {
+  test('启动时补齐当前标签并清理失效 tabId', async () => {
+    const harness = await loadBackgroundWithTabs([webTab(1), webTab(2)], {
+      initialStorage: { tabFirstSeen: { 1: 1234, 99: 5678 } },
+    });
+
+    expect(harness.storage.tabFirstSeen['1']).toBe(1234);
+    expect(harness.storage.tabFirstSeen['2']).toEqual(expect.any(Number));
+    expect(harness.storage.tabFirstSeen['99']).toBeUndefined();
+
+    harness.listeners.onCreated(webTab(3));
+    harness.listeners.onRemoved(1);
+    await flushPromises();
+
+    expect(harness.storage.tabFirstSeen['3']).toEqual(expect.any(Number));
+    expect(harness.storage.tabFirstSeen['1']).toBeUndefined();
   });
 });
 

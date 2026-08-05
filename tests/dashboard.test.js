@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 import { URL } from 'node:url';
 
 const indexPath = new URL('../extension/index.html', import.meta.url);
+const sharedPath = new URL('../extension/shared.js', import.meta.url);
 const appPath = new URL('../extension/app.js', import.meta.url);
 const extensionUrl = 'chrome-extension://tab-out-test/index.html';
 const gib = 1024 ** 3;
@@ -15,7 +16,7 @@ afterEach(() => {
 });
 
 async function flushAsyncWork() {
-  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  for (let i = 0; i < 40; i += 1) await Promise.resolve();
 }
 
 function tab(overrides) {
@@ -34,8 +35,9 @@ function tab(overrides) {
   };
 }
 
-async function loadDashboard({ tabs: initialTabs, deferred = [] }) {
+async function loadDashboard({ tabs: initialTabs, deferred = [], settings = {} }) {
   const html = await readFile(indexPath, 'utf8');
+  const sharedSource = await readFile(sharedPath, 'utf8');
   const appSource = await readFile(appPath, 'utf8');
   const dom = new JSDOM(html, {
     url: extensionUrl,
@@ -48,7 +50,7 @@ async function loadDashboard({ tabs: initialTabs, deferred = [] }) {
   dom.window.Date = Date;
 
   let tabs = initialTabs.map(item => ({ ...item }));
-  const storage = { deferred };
+  const storage = { deferred, settings };
   const chrome = {
     runtime: { id: 'tab-out-test' },
     tabs: {
@@ -89,6 +91,7 @@ async function loadDashboard({ tabs: initialTabs, deferred = [] }) {
 
   dom.window.chrome = chrome;
   dom.window.console = console;
+  dom.window.eval(sharedSource);
   dom.window.eval(appSource);
   await flushAsyncWork();
 
@@ -102,7 +105,7 @@ async function loadDashboard({ tabs: initialTabs, deferred = [] }) {
 }
 
 describe('new tab dashboard seam', () => {
-  test('renders grouped tabs, saved tabs, and the system memory snapshot', async () => {
+  test('renders grouped tabs, saved tabs, and the enabled system memory snapshot', async () => {
     vi.useFakeTimers({ now: new Date('2026-07-05T12:00:00Z') });
     const { document } = await loadDashboard({
       tabs: [
@@ -121,6 +124,7 @@ describe('new tab dashboard seam', () => {
           dismissed: false,
         },
       ],
+      settings: { showSystemMemory: true },
     });
 
     const page = within(document.body);
@@ -141,6 +145,7 @@ describe('new tab dashboard seam', () => {
         tab({ id: 3, url: 'https://active.test/current', title: 'Active work', active: true }),
       ],
     });
+    expect(document.getElementById('systemMemoryPanel').style.display).toBe('none');
     const page = within(document.body);
     const alphaCard = document.querySelector('[data-domain-id="domain-alpha-test"]');
 

@@ -49,7 +49,7 @@ body::before {
   z-index: 1;
   max-width: 960px;
   margin: 0 auto;
-  padding: 40px 32px 80px;
+  padding: 16px 32px 64px;
 }
 
 /* When the saved-for-later sidebar is open, expand the container
@@ -156,11 +156,12 @@ header {
 
 /* ---- System memory snapshot ---- */
 .system-memory-panel {
-  width: min(480px, 48vw);
-  padding: 0;
-  margin: 0;
+  width: 100%;
+  padding: 10px 12px;
+  margin: 0 0 16px;
   background: transparent;
-  border: none;
+  border: 1px solid var(--warm-gray);
+  border-radius: 8px;
   opacity: 0.82;
 }
 
@@ -1442,35 +1443,23 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 
-/* ---- Custom logo, header tools, and settings ---- */
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.header-logo {
-  width: 49px;
-  height: 49px;
+/* ---- 紧凑悬浮控件与设置 ---- */
+.floating-logo {
+  position: fixed;
+  top: 10px;
+  left: 14px;
+  z-index: 40;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
   border-radius: 6px;
-  flex-shrink: 0;
-}
-
-.header-text {
-  min-width: 0;
-}
-
-.header-tools {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1;
-  justify-content: flex-end;
 }
 
 .settings-button {
+  position: fixed;
+  top: 10px;
+  right: 14px;
+  z-index: 50;
   width: 34px;
   height: 34px;
   padding: 7px;
@@ -1589,6 +1578,10 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   width: 100%;
 }
 
+.settings-select {
+  cursor: pointer;
+}
+
 .settings-input:focus,
 .settings-textarea:focus {
   border-color: var(--accent-amber);
@@ -1649,6 +1642,25 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 .settings-checkbox:checked::after {
   transform: translateX(16px);
+}
+
+.settings-remote-group {
+  padding-top: 14px;
+  border-top: 1px solid var(--warm-gray);
+}
+
+.remote-status {
+  min-height: 18px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.remote-status[data-state="connected"] {
+  color: var(--accent-sage);
+}
+
+.remote-status[data-state="error"] {
+  color: var(--accent-rose);
 }
 
 /* ---- Tab List ---- */
@@ -1749,13 +1761,8 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 @media (max-width: 760px) {
-  header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .header-tools {
-    width: 100%;
+  .container {
+    padding: 12px 16px 48px;
   }
 
   .system-memory-panel {

@@ -25,5 +25,6 @@ describe('extension manifest contract', () => {
     );
     expect(manifest.permissions).not.toContain('processes');
     expect(manifest.permissions).not.toContain('debugger');
+    expect(manifest.host_permissions).toContain('http://localhost:8787/*');
   });
 });

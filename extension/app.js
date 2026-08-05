@@ -534,16 +534,7 @@ async function closeTabOutDupes() {
  * @param {{ url: string, title: string }} tab
  */
 async function saveTabForLater(tab) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  deferred.push({
-    id:        Date.now().toString(),
-    url:       tab.url,
-    title:     tab.title,
-    savedAt:   new Date().toISOString(),
-    completed: false,
-    dismissed: false,
-  });
-  await chrome.storage.local.set({ deferred });
+  await TabOutShared.saveTabForLater(tab);
 }
 
 /**
@@ -803,29 +794,6 @@ function timeAgo(dateStr) {
   return diffDays + ' days ago';
 }
 
-/**
- * getGreeting() — "Good morning / afternoon / evening"
- */
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-/**
- * getDateDisplay() — "Friday, April 4, 2026"
- */
-function getDateDisplay() {
-  return new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year:    'numeric',
-    month:   'long',
-    day:     'numeric',
-  });
-}
-
-
 /* ----------------------------------------------------------------
    DOMAIN & TITLE CLEANUP HELPERS
    ---------------------------------------------------------------- */
@@ -1019,16 +987,11 @@ const ICONS = {
 /* ----------------------------------------------------------------
    CUSTOM LOGO AND NAV LIST SETTINGS
    ---------------------------------------------------------------- */
-const DEFAULT_SETTINGS = {
-  logoUrl: '',
-  showTabList: true,
-  tabListItems: [],
-};
+const DEFAULT_SETTINGS = TabOutShared.DEFAULT_SETTINGS;
 
 async function getSettings() {
   try {
-    const { settings } = await chrome.storage.local.get('settings');
-    return { ...DEFAULT_SETTINGS, ...(settings || {}) };
+    return await TabOutShared.getSettings();
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -1036,10 +999,7 @@ async function getSettings() {
 
 async function saveSettings(partial) {
   try {
-    const current = await getSettings();
-    const next = { ...current, ...partial };
-    await chrome.storage.local.set({ settings: next });
-    return next;
+    return await TabOutShared.saveSettings(partial);
   } catch (err) {
     console.warn('[tab-out] Failed to save settings:', err);
     return null;
@@ -1283,11 +1243,17 @@ function renderSystemMemoryUnavailable(message) {
   }
 }
 
-async function renderSystemMemoryPanel({ silent = false } = {}) {
+async function renderSystemMemoryPanel({ silent = false, enabled } = {}) {
   const panel = document.getElementById('systemMemoryPanel');
   const statsEl = document.getElementById('systemMemoryStats');
   const usageEl = document.getElementById('systemMemoryUsage');
   if (!panel || !statsEl) return;
+
+  const shouldShow = enabled ?? (await getSettings()).showSystemMemory;
+  if (!shouldShow) {
+    panel.style.display = 'none';
+    return;
+  }
 
   if (!silent) {
     statsEl.innerHTML = '<div class="system-memory-loading">Loading memory snapshot...</div>';
@@ -2026,70 +1992,36 @@ function renderUngroupedSection(ungroupedTabs) {
     </div>`;
 }
 
-/**
- * renderStaticDashboard()
- *
- * The main render function:
- * 1. Paints greeting + date
- * 2. Fetches open tabs and tab groups via chrome APIs
- * 3. Branches to group view or domain view based on viewMode
- * 4. Updates footer stats
- * 5. Renders the "Saved for Later" checklist
- * 6. Sets up 30-second auto-refresh
- */
-async function renderStaticDashboard() {
-  // --- Header ---
-  const greetingEl = document.getElementById('greeting');
-  const dateEl     = document.getElementById('dateDisplay');
-  if (greetingEl) greetingEl.textContent = getGreeting();
-  if (dateEl)     dateEl.textContent     = getDateDisplay();
-
-  // Start independent panels while browser APIs are queried.
-  const deferredRender = renderDeferredColumn();
-  const memoryRender = renderSystemMemoryPanel();
-
-  // --- Fetch tabs + tab groups in parallel ---
+async function refreshOpenTabsDashboard() {
   await Promise.all([fetchOpenTabs(), fetchTabGroups()]);
-  const realTabs = getRealTabs();
-
-  // --- Determine view mode ---
-  // If no Chrome groups exist, force domain view and hide the toggle.
-  const storedView    = await loadViewMode();
-  const effectiveView  = (tabGroupsList.length === 0) ? 'domain' : storedView;
-
-  // --- Branch on view mode ---
-  if (effectiveView === 'group') {
+  const storedView = await loadViewMode();
+  const view = tabGroupsList.length === 0 ? 'domain' : storedView;
+  if (view === 'group') {
     await renderGroupView();
   } else {
-    await renderDomainView(realTabs);
+    await renderDomainView(getRealTabs());
   }
-
-  // --- Footer stats ---
   const statTabs = document.getElementById('statTabs');
   if (statTabs) statTabs.textContent = openTabs.length;
+}
 
-  // --- Finish the system memory snapshot started above ---
-  await memoryRender;
-
-  // --- Check for duplicate Tab Out tabs ---
-  checkTabOutDupes();
-
-  // --- Finish the "Saved for Later" column started above ---
-  await deferredRender;
-
-  // --- 30-second auto-refresh (clears stale group state) ---
+function configureDashboardRefresh(intervalSeconds) {
   if (window._tabOutRefreshTimer) clearInterval(window._tabOutRefreshTimer);
-  window._tabOutRefreshTimer = setInterval(async () => {
-    await Promise.all([fetchOpenTabs(), fetchTabGroups()]);
-    const stored = await loadViewMode();
-    const view   = (tabGroupsList.length === 0) ? 'domain' : stored;
-    if (view === 'group') {
-      await renderGroupView();
-    } else {
-      await renderDomainView(getRealTabs());
-    }
-    if (statTabs) statTabs.textContent = openTabs.length;
-  }, 30000);
+  window._tabOutRefreshTimer = null;
+  if (![10, 30, 60].includes(Number(intervalSeconds))) return;
+  window._tabOutRefreshTimer = setInterval(refreshOpenTabsDashboard, Number(intervalSeconds) * 1000);
+}
+
+async function renderStaticDashboard() {
+  const settings = await getSettings();
+  const deferredRender = renderDeferredColumn();
+  const memoryRender = renderSystemMemoryPanel({ enabled: settings.showSystemMemory });
+
+  await refreshOpenTabsDashboard();
+  await memoryRender;
+  checkTabOutDupes();
+  await deferredRender;
+  configureDashboardRefresh(settings.refreshIntervalSeconds);
 }
 
 async function renderDashboard() {
@@ -2473,7 +2405,7 @@ document.addEventListener('keydown', async (e) => {
 });
 
 /* ----------------------------------------------------------------
-   CUSTOMIZATION SETTINGS UI
+   设置面板
    ---------------------------------------------------------------- */
 (function initSettings() {
   const modal = document.getElementById('settingsModal');
@@ -2483,6 +2415,12 @@ document.addEventListener('keydown', async (e) => {
   const logoInput = document.getElementById('logoUrl');
   const showTabListToggle = document.getElementById('showTabListToggle');
   const tabListTextarea = document.getElementById('tabListItems');
+  const refreshInterval = document.getElementById('refreshInterval');
+  const showSystemMemoryToggle = document.getElementById('showSystemMemoryToggle');
+  const remoteSyncToggle = document.getElementById('remoteSyncToggle');
+  const remoteServerUrl = document.getElementById('remoteServerUrl');
+  const extensionKey = document.getElementById('extensionKey');
+  const remoteStatus = document.getElementById('remoteStatus');
   if (!modal || !openButton) return;
 
   function applyLogo(url) {
@@ -2498,11 +2436,39 @@ document.addEventListener('keydown', async (e) => {
     }
   }
 
+  function renderRemoteStatus(status, enabled) {
+    if (!remoteStatus) return;
+    const effective = enabled ? (status || { state: 'connecting' }) : { state: 'disabled' };
+    const labels = {
+      disabled: 'Remote sync is off',
+      connecting: 'Connecting…',
+      connected: 'Connected',
+      error: 'Connection failed',
+    };
+    remoteStatus.dataset.state = effective.state || 'disabled';
+    remoteStatus.textContent = effective.message || labels[effective.state] || labels.disabled;
+  }
+
+  async function loadRemoteStatus() {
+    try {
+      const stored = await chrome.storage.local.get('remoteConnectionStatus');
+      return stored.remoteConnectionStatus || null;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadSettingsIntoUi() {
-    const settings = await getSettings();
+    const [settings, status] = await Promise.all([getSettings(), loadRemoteStatus()]);
     if (logoInput) logoInput.value = settings.logoUrl || '';
     if (showTabListToggle) showTabListToggle.checked = settings.showTabList !== false;
     if (tabListTextarea) tabListTextarea.value = tabListItemsToText(settings.tabListItems);
+    if (refreshInterval) refreshInterval.value = String(settings.refreshIntervalSeconds);
+    if (showSystemMemoryToggle) showSystemMemoryToggle.checked = settings.showSystemMemory === true;
+    if (remoteSyncToggle) remoteSyncToggle.checked = settings.remoteSyncEnabled === true;
+    if (remoteServerUrl) remoteServerUrl.value = settings.remoteServerUrl || DEFAULT_SETTINGS.remoteServerUrl;
+    if (extensionKey) extensionKey.value = settings.extensionKey || '';
+    renderRemoteStatus(status, settings.remoteSyncEnabled);
     return settings;
   }
 
@@ -2511,11 +2477,19 @@ document.addEventListener('keydown', async (e) => {
       logoUrl: logoInput ? logoInput.value.trim() : '',
       showTabList: showTabListToggle ? showTabListToggle.checked : true,
       tabListItems: parseTabListItems(tabListTextarea ? tabListTextarea.value : ''),
+      refreshIntervalSeconds: refreshInterval ? Number(refreshInterval.value) : 30,
+      showSystemMemory: showSystemMemoryToggle ? showSystemMemoryToggle.checked : false,
+      remoteSyncEnabled: remoteSyncToggle ? remoteSyncToggle.checked : false,
+      remoteServerUrl: remoteServerUrl ? remoteServerUrl.value.trim() : DEFAULT_SETTINGS.remoteServerUrl,
+      extensionKey: extensionKey ? extensionKey.value.trim() : '',
     };
     const saved = await saveSettings(next);
     if (!saved) return;
     applyLogo(saved.logoUrl);
     await renderTabList();
+    await renderSystemMemoryPanel({ enabled: saved.showSystemMemory });
+    configureDashboardRefresh(saved.refreshIntervalSeconds);
+    renderRemoteStatus({ state: saved.remoteSyncEnabled ? 'connecting' : 'disabled' }, saved.remoteSyncEnabled);
   }
 
   function closeModal() {
@@ -2534,6 +2508,9 @@ document.addEventListener('keydown', async (e) => {
 
   if (logoInput) logoInput.addEventListener('change', commitSettings);
   if (showTabListToggle) showTabListToggle.addEventListener('change', commitSettings);
+  if (refreshInterval) refreshInterval.addEventListener('change', commitSettings);
+  if (showSystemMemoryToggle) showSystemMemoryToggle.addEventListener('change', commitSettings);
+  if (remoteSyncToggle) remoteSyncToggle.addEventListener('change', commitSettings);
   if (tabListTextarea) {
     let inputTimer = null;
     tabListTextarea.addEventListener('input', () => {
@@ -2541,9 +2518,26 @@ document.addEventListener('keydown', async (e) => {
       inputTimer = setTimeout(commitSettings, 600);
     });
   }
+  for (const input of [remoteServerUrl, extensionKey]) {
+    if (!input) continue;
+    let inputTimer = null;
+    input.addEventListener('input', () => {
+      clearTimeout(inputTimer);
+      inputTimer = setTimeout(commitSettings, 500);
+    });
+  }
+
+  if (chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local' || !changes.remoteConnectionStatus) return;
+      getSettings().then(settings => {
+        renderRemoteStatus(changes.remoteConnectionStatus.newValue, settings.remoteSyncEnabled);
+      });
+    });
+  }
 
   setTimeout(() => {
-    getSettings().then(settings => {
+    loadSettingsIntoUi().then(settings => {
       applyLogo(settings.logoUrl);
       return renderTabList();
     });
