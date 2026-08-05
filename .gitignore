@@ -10,6 +10,8 @@ extension/config.local.js
 # 本机远程查看器密钥与运行时数据
 server/config.json
 server/data/
+# install-task.ps1 生成，里面写死了本机的绝对路径
+server/start-hidden.vbs
 
 # Claude<->Codex bridge (control-plane artifacts, not part of the extension)
 .bridge/
