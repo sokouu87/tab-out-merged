@@ -1130,36 +1130,39 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .recently-closed-section {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--warm-gray);
+  margin-bottom: 40px;
 }
 
+/* Same multi-column flow as .missions above, so the column count and card width
+   line up with the tab cards instead of forming a separate narrow list.
+   Deliberately no max-height/overflow here: this section scrolls with the page.
+   When it lived in the right column it needed its own scroll box, which meant a
+   second scrollbar sitting right next to the column's. */
 .recently-closed-list {
-  max-height: min(320px, 40vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  columns: 280px;
+  column-gap: 12px;
 }
 
 .recently-closed-item {
   width: 100%;
+  /* Multi-column layout will otherwise slice an entry across a column break. */
+  break-inside: avoid;
   padding: 10px 2px;
   border: 0;
   border-bottom: 1px solid rgba(154, 145, 138, 0.12);
   display: flex;
   align-items: flex-start;
   gap: 9px;
+  /* Flex children default to min-width:auto and refuse to shrink, so a long URL
+     pushes the row wider than its column. */
+  min-width: 0;
+  overflow: hidden;
   background: transparent;
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s;
-}
-
-.recently-closed-item:last-child {
-  border-bottom: 0;
 }
 
 .recently-closed-item:hover {

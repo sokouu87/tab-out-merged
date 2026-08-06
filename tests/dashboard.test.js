@@ -220,15 +220,21 @@ describe('new tab dashboard seam', () => {
       ],
     });
 
+    // Recently closed sits under Open tabs, not in the right column: it needs
+    // the same multi-column card flow and width as the tab cards, and nesting it
+    // in the fixed-height right column produced a second scrollbar.
     const column = document.getElementById('deferredColumn');
-    expect(Array.from(column.children).map(element => element.id)).toEqual([
-      'deferredSavedSection',
-      'recentlyClosedDesktopSection',
-    ]);
+    expect(Array.from(column.children).map(element => element.id)).toEqual(['deferredSavedSection']);
+
+    const openTabsSection = document.getElementById('openTabsSection');
+    const recentlyClosed = document.getElementById('recentlyClosedDesktopSection');
+    expect(openTabsSection.contains(recentlyClosed)).toBe(true);
+    expect(recentlyClosed.previousElementSibling.id).toBe('openTabsMissions');
+
     expect(document.getElementById('recentlyClosedDesktopCount').textContent).toBe('2 items');
     expect(document.querySelectorAll('#recentlyClosedDesktopList .recently-closed-item')).toHaveLength(2);
 
-    fireEvent.click(within(column).getByRole('button', { name: 'Restore Closed one' }));
+    fireEvent.click(within(recentlyClosed).getByRole('button', { name: 'Restore Closed one' }));
     await flushAsyncWork();
 
     expect(chrome.sessions.restore).toHaveBeenCalledWith('restore-one');

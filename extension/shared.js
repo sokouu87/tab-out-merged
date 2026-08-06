@@ -72,7 +72,10 @@
         url: tab.url || '',
         title: tab.title || tab.url || '',
         favIconUrl: tab.favIconUrl || '',
-        closedAt: Number.isFinite(item.lastModified) ? item.lastModified : now,
+        // chrome.sessions reports lastModified in SECONDS, unlike almost every
+        // other Chrome API. Using it as-is dated every entry to early 1970 and
+        // rendered "20650 days ago" across the whole list.
+        closedAt: Number.isFinite(item.lastModified) ? item.lastModified * 1000 : now,
         kind: isWindow ? 'window' : 'tab',
         tabCount: isWindow ? Math.max(tabs.length, 1) : 1,
       });

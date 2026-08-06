@@ -150,11 +150,15 @@ describe('tab first-seen tracking', () => {
 
 describe('recently closed snapshot seam', () => {
   test('归一化普通标签和关闭窗口首标签，并把查询限制为 25 条', async () => {
-    const closedAt = Date.UTC(2026, 7, 6, 9, 0, 0);
+    // chrome.sessions reports lastModified in SECONDS. Feeding the mock a
+    // millisecond value would let a broken conversion pass unnoticed — which is
+    // exactly what happened: every entry rendered as "20650 days ago".
+    const closedAtMs = Date.UTC(2026, 7, 6, 9, 0, 0);
+    const lastModifiedSeconds = Math.floor(closedAtMs / 1000);
     const harness = await loadBackgroundWithTabs([webTab(1)], {
       recentlyClosed: [
         {
-          lastModified: closedAt,
+          lastModified: lastModifiedSeconds,
           tab: {
             sessionId: 'tab-session',
             url: 'https://single.example/article',
@@ -163,7 +167,7 @@ describe('recently closed snapshot seam', () => {
           },
         },
         {
-          lastModified: closedAt - 1_000,
+          lastModified: lastModifiedSeconds - 1,
           window: {
             sessionId: 'window-session',
             tabs: [
@@ -187,7 +191,7 @@ describe('recently closed snapshot seam', () => {
         url: 'https://single.example/article',
         title: '单个标签',
         favIconUrl: 'https://single.example/favicon.ico',
-        closedAt,
+        closedAt: closedAtMs,
         kind: 'tab',
         tabCount: 1,
       },
@@ -196,7 +200,7 @@ describe('recently closed snapshot seam', () => {
         url: 'https://window.example/first',
         title: '窗口首标签',
         favIconUrl: '',
-        closedAt: closedAt - 1_000,
+        closedAt: closedAtMs - 1_000,
         kind: 'window',
         tabCount: 2,
       },

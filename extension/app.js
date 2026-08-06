@@ -1635,9 +1635,11 @@ async function renderDeferredColumn() {
 function updateDeferredColumnVisibility() {
   const column = document.getElementById('deferredColumn');
   if (!column) return;
+  // Recently closed moved out of this column and under Open tabs, so it no
+  // longer keeps the column alive — otherwise an empty right column would show
+  // whenever there was closed history but nothing saved.
   const hasSaved = document.getElementById('deferredSavedSection')?.style.display !== 'none';
-  const hasRecentlyClosed = document.getElementById('recentlyClosedDesktopSection')?.style.display !== 'none';
-  column.style.display = hasSaved || hasRecentlyClosed ? 'block' : 'none';
+  column.style.display = hasSaved ? 'block' : 'none';
 }
 
 function renderRecentlyClosedItem(item) {
