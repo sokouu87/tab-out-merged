@@ -1660,6 +1660,26 @@ function renderRecentlyClosedItem(item) {
     </button>`;
 }
 
+// Keep in step with the :nth-child(n + 10) rule in style.css — 3 columns x 3 rows.
+const RECENTLY_CLOSED_COLLAPSED_COUNT = 9;
+
+function renderRecentlyClosedToggle(list, total) {
+  const toggle = document.getElementById('recentlyClosedToggle');
+  if (!toggle) return;
+
+  const hidden = total - RECENTLY_CLOSED_COLLAPSED_COUNT;
+  if (hidden <= 0) {
+    toggle.style.display = 'none';
+    list.classList.remove('is-expanded');
+    return;
+  }
+
+  toggle.style.display = 'block';
+  toggle.textContent = list.classList.contains('is-expanded')
+    ? 'Show less'
+    : `Show ${hidden} more`;
+}
+
 async function renderRecentlyClosedColumn() {
   const section = document.getElementById('recentlyClosedDesktopSection');
   const list = document.getElementById('recentlyClosedDesktopList');
@@ -1681,6 +1701,7 @@ async function renderRecentlyClosedColumn() {
     section.style.display = 'block';
     count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
     list.innerHTML = items.map(renderRecentlyClosedItem).join('');
+    renderRecentlyClosedToggle(list, items.length);
     updateDeferredColumnVisibility();
   } catch (error) {
     console.warn('[tab-out] Could not load recently closed tabs:', error);
@@ -2423,6 +2444,16 @@ document.addEventListener('click', async (e) => {
       : 'All tabs closed. Fresh start.');
     return;
   }
+});
+
+// ---- Recently closed toggle — reveal the rows past the first 3x3 block ----
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#recentlyClosedToggle')) return;
+
+  const list = document.getElementById('recentlyClosedDesktopList');
+  if (!list) return;
+  list.classList.toggle('is-expanded');
+  renderRecentlyClosedToggle(list, list.children.length);
 });
 
 // ---- Archive toggle — expand/collapse the archive section ----

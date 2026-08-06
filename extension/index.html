@@ -78,18 +78,10 @@
 
     <!-- LEFT COLUMN: Open tabs -->
     <div class="active-section" id="openTabsSection" style="display:none">
-      <div class="section-header">
-        <h2 id="openTabsSectionTitle">Right now</h2>
-        <div class="section-line"></div>
-        <div class="section-count" id="openTabsSectionCount"></div>
-      </div>
-      <div class="missions" id="openTabsMissions"></div>
-
-      <!-- Recently closed lives here, under Open tabs, rather than in the right
-           column: it needs the same multi-column card flow and the same width as
-           the tab cards above it. Sitting in the right column it had to scroll
-           inside a fixed-height box, which put a second scrollbar next to the
-           column's own. -->
+      <!-- Recently closed sits above Open tabs and inside this column so it gets
+           the same width as the tab cards. It shows a 3x3 grid and folds the rest
+           away; in the right column it needed its own scroll box, which put a
+           second scrollbar right next to that column's own. -->
       <div class="recently-closed-section" id="recentlyClosedDesktopSection" style="display:none">
         <div class="section-header">
           <h2>Recently closed</h2>
@@ -97,7 +89,15 @@
           <div class="section-count" id="recentlyClosedDesktopCount"></div>
         </div>
         <div class="recently-closed-list" id="recentlyClosedDesktopList"></div>
+        <button class="recently-closed-toggle" id="recentlyClosedToggle" style="display:none"></button>
       </div>
+
+      <div class="section-header">
+        <h2 id="openTabsSectionTitle">Right now</h2>
+        <div class="section-line"></div>
+        <div class="section-count" id="openTabsSectionCount"></div>
+      </div>
+      <div class="missions" id="openTabsMissions"></div>
     </div>
 
     <!-- RIGHT COLUMN: Saved for later -->

@@ -1130,23 +1130,43 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .recently-closed-section {
-  margin-bottom: 40px;
+  margin-bottom: 32px;
 }
 
-/* Same multi-column flow as .missions above, so the column count and card width
-   line up with the tab cards instead of forming a separate narrow list.
-   Deliberately no max-height/overflow here: this section scrolls with the page.
-   When it lived in the right column it needed its own scroll box, which meant a
-   second scrollbar sitting right next to the column's. */
+/* Fixed 3 columns, and only the first 3 rows are shown until expanded, so this
+   section stays a compact 3x3 block above Open tabs instead of pushing the tab
+   cards off screen. Deliberately no max-height/overflow: it grows with the page
+   rather than scrolling inside itself, which is what produced a second
+   scrollbar back when it lived in the right column. */
 .recently-closed-list {
-  columns: 280px;
-  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 20px;
+}
+
+/* Grid fills row by row, so the first nine entries are exactly three rows. */
+.recently-closed-list:not(.is-expanded) .recently-closed-item:nth-child(n + 10) {
+  display: none;
+}
+
+.recently-closed-toggle {
+  margin-top: 10px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.recently-closed-toggle:hover {
+  color: var(--accent);
 }
 
 .recently-closed-item {
   width: 100%;
-  /* Multi-column layout will otherwise slice an entry across a column break. */
-  break-inside: avoid;
   padding: 10px 2px;
   border: 0;
   border-bottom: 1px solid rgba(154, 145, 138, 0.12);

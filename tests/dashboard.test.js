@@ -220,24 +220,58 @@ describe('new tab dashboard seam', () => {
       ],
     });
 
-    // Recently closed sits under Open tabs, not in the right column: it needs
-    // the same multi-column card flow and width as the tab cards, and nesting it
-    // in the fixed-height right column produced a second scrollbar.
+    // Recently closed leads the left column, above Open tabs — not in the right
+    // column, where its fixed-height scroll box sat beside that column's own
+    // scrollbar.
     const column = document.getElementById('deferredColumn');
     expect(Array.from(column.children).map(element => element.id)).toEqual(['deferredSavedSection']);
 
     const openTabsSection = document.getElementById('openTabsSection');
     const recentlyClosed = document.getElementById('recentlyClosedDesktopSection');
-    expect(openTabsSection.contains(recentlyClosed)).toBe(true);
-    expect(recentlyClosed.previousElementSibling.id).toBe('openTabsMissions');
+    expect(openTabsSection.firstElementChild.id).toBe('recentlyClosedDesktopSection');
 
     expect(document.getElementById('recentlyClosedDesktopCount').textContent).toBe('2 items');
     expect(document.querySelectorAll('#recentlyClosedDesktopList .recently-closed-item')).toHaveLength(2);
+    // Two entries fit inside the 3x3 block, so there is nothing to expand.
+    expect(document.getElementById('recentlyClosedToggle').style.display).toBe('none');
 
     fireEvent.click(within(recentlyClosed).getByRole('button', { name: 'Restore Closed one' }));
     await flushAsyncWork();
 
     expect(chrome.sessions.restore).toHaveBeenCalledWith('restore-one');
     expect(document.querySelectorAll('#recentlyClosedDesktopList .recently-closed-item')).toHaveLength(1);
+  });
+
+  test('超过 3x3 的部分折叠起来，点击后展开', async () => {
+    const { document } = await loadDashboard({
+      tabs: [tab({ id: 1, url: 'https://open.test', title: 'Open' })],
+      recentlyClosed: Array.from({ length: 12 }, (_, index) => ({
+        lastModified: Date.now() - index * 1_000,
+        tab: {
+          sessionId: `restore-${index}`,
+          url: `https://closed-${index}.test`,
+          title: `Closed ${index}`,
+          favIconUrl: '',
+        },
+      })),
+    });
+
+    const list = document.getElementById('recentlyClosedDesktopList');
+    const toggle = document.getElementById('recentlyClosedToggle');
+
+    // All 12 are in the DOM; CSS hides everything past the ninth until expanded,
+    // so the toggle only has to advertise the remainder.
+    expect(list.children).toHaveLength(12);
+    expect(list.classList.contains('is-expanded')).toBe(false);
+    expect(toggle.style.display).toBe('block');
+    expect(toggle.textContent).toBe('Show 3 more');
+
+    fireEvent.click(toggle);
+    expect(list.classList.contains('is-expanded')).toBe(true);
+    expect(toggle.textContent).toBe('Show less');
+
+    fireEvent.click(toggle);
+    expect(list.classList.contains('is-expanded')).toBe(false);
+    expect(toggle.textContent).toBe('Show 3 more');
   });
 });
