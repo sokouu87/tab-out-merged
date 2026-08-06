@@ -263,8 +263,10 @@ describe('new tab dashboard seam', () => {
     // so the toggle only has to advertise the remainder.
     expect(list.children).toHaveLength(12);
     expect(list.classList.contains('is-expanded')).toBe(false);
-    expect(toggle.style.display).toBe('block');
+    expect(toggle.style.display).toBe('inline-block');
     expect(toggle.textContent).toBe('Show 3 more');
+    // Lives in the header beside the count, not as a row under the list.
+    expect(toggle.parentElement.classList.contains('section-header')).toBe(true);
 
     fireEvent.click(toggle);
     expect(list.classList.contains('is-expanded')).toBe(true);

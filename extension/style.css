@@ -1149,14 +1149,20 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   display: none;
 }
 
+/* Sits in the section header next to the item count, so it costs no vertical
+   space of its own. flex-shrink: 0 keeps it off a second line when the header
+   gets tight. */
 .recently-closed-toggle {
-  margin-top: 10px;
-  padding: 5px 0;
+  flex-shrink: 0;
+  margin-left: 10px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: 12px;
+  line-height: inherit;
+  white-space: nowrap;
   cursor: pointer;
   transition: color 0.15s;
 }

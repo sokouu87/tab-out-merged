@@ -1674,7 +1674,7 @@ function renderRecentlyClosedToggle(list, total) {
     return;
   }
 
-  toggle.style.display = 'block';
+  toggle.style.display = 'inline-block';
   toggle.textContent = list.classList.contains('is-expanded')
     ? 'Show less'
     : `Show ${hidden} more`;
