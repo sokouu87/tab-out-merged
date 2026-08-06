@@ -77,6 +77,12 @@ describe('远程查看器 API', () => {
     });
   }
 
+  async function authenticatedCookie() {
+    const response = await login();
+    expect(response.status).toBe(200);
+    return response.headers.get('set-cookie').split(';')[0];
+  }
+
   test('错误密码被拒绝', async () => {
     const response = await login('wrong-password');
     expect(response.status).toBe(401);
@@ -93,6 +99,107 @@ describe('远程查看器 API', () => {
       body: JSON.stringify({ tabs: [], saved: [], ts: Date.now() }),
     });
     expect(response.status).toBe(401);
+  });
+
+  test('未登录访问快捷方式和图标端点被拒绝', async () => {
+    const [shortcutsResponse, iconResponse] = await Promise.all([
+      fetch(`${baseUrl}/api/shortcuts`),
+      fetch(`${baseUrl}/api/icon?u=${encodeURIComponent('https://github.com')}`),
+    ]);
+
+    expect(shortcutsResponse.status).toBe(401);
+    expect(iconResponse.status).toBe(401);
+  });
+
+  test('快捷方式超过 10 条被拒绝', async () => {
+    const cookie = await authenticatedCookie();
+    const response = await fetch(`${baseUrl}/api/shortcuts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify(Array.from({ length: 11 }, (_, index) => ({
+        url: `https://example${index}.test`,
+        title: `Example ${index}`,
+        position: index,
+      }))),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.any(String) });
+  });
+
+  test('快捷方式拒绝非 HTTP 或 HTTPS URL', async () => {
+    const cookie = await authenticatedCookie();
+    const response = await fetch(`${baseUrl}/api/shortcuts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify([{ url: 'javascript:alert(1)', title: '危险链接', position: 0 }]),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.any(String) });
+  });
+
+  test('快捷方式拒绝超长字段', async () => {
+    const cookie = await authenticatedCookie();
+    const response = await fetch(`${baseUrl}/api/shortcuts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify([{ url: 'https://example.test', title: 'x'.repeat(101), position: 0 }]),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  test('快捷方式可以整份写入并按位置读回', async () => {
+    const cookie = await authenticatedCookie();
+    const shortcuts = [
+      { url: 'https://github.com', title: 'GitHub', position: 0 },
+      { url: 'https://youtube.com', title: 'YouTube', position: 1 },
+      { url: 'https://x.com', title: 'X', position: 2 },
+    ];
+    const putResponse = await fetch(`${baseUrl}/api/shortcuts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify(shortcuts),
+    });
+    expect(putResponse.status).toBe(200);
+
+    const getResponse = await fetch(`${baseUrl}/api/shortcuts`, { headers: { Cookie: cookie } });
+    expect(getResponse.status).toBe(200);
+    expect(await getResponse.json()).toEqual(shortcuts);
+  });
+
+  test('图标端点拒绝没在快捷方式或当前标签里出现过的站点', async () => {
+    const cookie = await authenticatedCookie();
+    await fetch(`${baseUrl}/api/shortcuts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify([{ url: 'https://github.com', title: 'GitHub', position: 0 }]),
+    });
+
+    const response = await fetch(`${baseUrl}/api/icon?u=${encodeURIComponent('https://never-seen.example')}`, {
+      headers: { Cookie: cookie },
+    });
+    expect(response.status).toBe(403);
+  });
+
+  test('图标端点拒绝回环和私有网段 URL，即使它们已被加进快捷方式', async () => {
+    // 白名单只是第一道门。这里先把私有地址塞进快捷方式让它通过白名单，
+    // 验证 icon-proxy 自己的 SSRF 防护仍然独立拦截——两层都得管用。
+    const cookie = await authenticatedCookie();
+    const targets = ['http://127.0.0.1/favicon.ico', 'http://192.168.1.1/favicon.ico', 'http://[::1]/favicon.ico'];
+    await fetch(`${baseUrl}/api/shortcuts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify(targets.map((url, position) => ({ url, title: `t${position}`, position }))),
+    });
+
+    for (const target of targets) {
+      const response = await fetch(`${baseUrl}/api/icon?u=${encodeURIComponent(target)}`, {
+        headers: { Cookie: cookie },
+      });
+      expect(response.status, target).toBe(400);
+    }
   });
 
   test('手机指令可以入队，并在 ack 后出队', async () => {

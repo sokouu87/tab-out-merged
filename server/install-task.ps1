@@ -3,7 +3,10 @@ param(
     [switch]$Unregister,
     # Register an at-startup trigger instead of at-logon. Runs the service even
     # when nobody is signed in, but needs an elevated shell to register.
-    [switch]$AtStartup
+    [switch]$AtStartup,
+    # Restart the running service. Needed after changing the password or the
+    # server code, since config is read once at startup.
+    [switch]$Restart
 )
 
 Set-StrictMode -Version Latest
@@ -16,6 +19,41 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
 $taskName = 'Tab Out Remote Viewer'
 $serverDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $launcherPath = Join-Path $serverDir 'start-hidden.vbs'
+
+if ($Restart) {
+    # Stop-ScheduledTask does not help here. The task launches the VBScript shim,
+    # which fires node off with WScript.Shell.Run(..., 0, False) and exits — so the
+    # node process is not a child the scheduler owns or can stop. It has to be
+    # killed by port.
+    #
+    # That kill needs elevation: the node process was started by the scheduler, and
+    # a normal shell gets "Access is denied" trying to stop it.
+    $listener = Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue
+    if ($listener) {
+        try {
+            Stop-Process -Id $listener[0].OwningProcess -Force -ErrorAction Stop
+            Write-Host "Stopped running server (pid $($listener[0].OwningProcess))"
+        }
+        catch {
+            throw "Could not stop the running server (pid $($listener[0].OwningProcess)): $($_.Exception.Message)`nRun this from an elevated shell."
+        }
+        Start-Sleep -Seconds 1
+    }
+    else {
+        Write-Host 'Nothing listening on 8787; starting fresh.'
+    }
+
+    Start-ScheduledTask -TaskName $taskName
+    Start-Sleep -Seconds 3
+    $now = Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue
+    if ($now) {
+        Write-Host "Server is up (pid $($now[0].OwningProcess)) on $($now[0].LocalAddress):$($now[0].LocalPort)"
+    }
+    else {
+        throw 'The task was started but nothing is listening on 8787. Check Task Scheduler history.'
+    }
+    return
+}
 
 if ($Unregister) {
     $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue

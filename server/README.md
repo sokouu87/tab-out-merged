@@ -80,6 +80,23 @@ powershell.exe -ExecutionPolicy Bypass -File .\server\install-task.ps1
 powershell.exe -ExecutionPolicy Bypass -File .\server\install-task.ps1 -Unregister
 ```
 
+### 重启服务
+
+**改完密码或改完服务端代码后必须重启**，配置和代码都是启动时读进内存的。
+
+```powershell
+pwsh .\server\install-task.ps1 -Restart
+```
+
+> **别用 `Stop-ScheduledTask`，它对这个服务无效。** 计划任务拉起的是 VBScript 启动器，
+> 而启动器用 `WScript.Shell.Run(..., 0, False)` 把 node 发射出去后自己就退出了——
+> node 进程并不是调度器持有的子进程，停任务停不掉它。只能按端口找进程杀。
+>
+> 另外这个 kill **需要管理员权限**：node 是计划任务启动的，普通 shell 去停它会得到
+> "拒绝访问"。用提权的 shell 跑上面那条命令，或者走已配好的 Xterminal MCP 通道。
+>
+> （`Restart-ScheduledTask` 这个 cmdlet 在本机 PowerShell 里并不存在，别照搬网上的写法。）
+
 ## 5. 添加 Cloudflare Public Hostname
 
 这一步必须由用户在 Cloudflare Zero Trust 面板手动完成，不要修改本机 `cloudflared` 配置：

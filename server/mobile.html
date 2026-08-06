@@ -3,22 +3,155 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f0f10" media="(prefers-color-scheme: dark)">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <title>Tab Out</title>
   <style>
     :root {
       color-scheme: light dark;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      --bg: #f7f7f5; --card: #fff; --text: #181818; --muted: #777; --line: #e8e8e4;
-      --accent: #247a45; --danger: #b42318; --disabled: #aaa;
+      --bg: #f7f7f5;
+      --card: #fff;
+      --text: #181818;
+      --muted: #777;
+      --line: #e8e8e4;
+      --shortcut-line: rgba(24, 24, 24, .08);
+      --icon-surface: #eef0ed;
+      --empty-surface: #f0f1ee;
+      --empty-border: #d9dbd5;
+      --accent: #247a45;
+      --danger: #b42318;
+      --disabled: #aaa;
+      --overlay: rgba(0, 0, 0, .34);
+      --shadow: 0 -12px 36px rgba(0, 0, 0, .12);
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; background: var(--bg); color: var(--text); }
-    main { width: min(100%, 680px); margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 14px max(28px, env(safe-area-inset-bottom)); }
-    .status-line { min-height: 28px; display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+    body.modal-open { overflow: hidden; }
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    main {
+      width: min(100%, 680px);
+      margin: 0 auto;
+      padding:
+        max(12px, env(safe-area-inset-top))
+        max(14px, env(safe-area-inset-right))
+        max(28px, env(safe-area-inset-bottom))
+        max(14px, env(safe-area-inset-left));
+    }
+    .shortcut-panel { padding: 2px 0 16px; border-bottom: 1px solid var(--shortcut-line); }
+    .shortcut-heading { min-height: 25px; padding: 0 2px 4px; display: flex; align-items: center; gap: 8px; }
+    .shortcut-heading h1 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 650; letter-spacing: .01em; }
+    .shortcut-hint { margin-left: auto; color: var(--muted); font-size: 10px; }
+    .shortcut-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(2, 76px);
+      column-gap: 0;
+      row-gap: 10px;
+    }
+    .shortcut-slot { position: relative; min-width: 0; height: 76px; }
+    .shortcut-link, .shortcut-add {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      background: transparent;
+      color: inherit;
+      text-decoration: none;
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+    .shortcut-icon-shell {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      flex: 0 0 48px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 22%;
+      background: var(--icon-surface);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+    }
+    .shortcut-icon {
+      width: 100%;
+      height: 100%;
+      padding: 5px;
+      object-fit: contain;
+      background: var(--icon-surface);
+    }
+    .shortcut-fallback {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .shortcut-name {
+      width: 100%;
+      padding: 0 3px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 10.5px;
+      line-height: 15px;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .shortcut-add .shortcut-icon-shell {
+      border: 1px dashed var(--empty-border);
+      background: var(--empty-surface);
+      box-shadow: none;
+      color: var(--muted);
+      font-size: 26px;
+      font-weight: 300;
+    }
+    .shortcut-delete {
+      position: absolute;
+      z-index: 2;
+      top: -5px;
+      left: calc(50% - 31px);
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 2px solid var(--bg);
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: var(--danger);
+      color: #fff;
+      font-size: 18px;
+      line-height: 16px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+    }
+    .shortcut-grid.editing .shortcut-delete { display: flex; }
+    .shortcut-grid.editing .occupied .shortcut-link { animation: shortcut-wiggle .22s ease-in-out infinite alternate; }
+    .shortcut-grid.editing .occupied:nth-child(even) .shortcut-link { animation-delay: -.11s; }
+    @keyframes shortcut-wiggle {
+      from { transform: rotate(-1.3deg); }
+      to { transform: rotate(1.3deg); }
+    }
+    .status-line { min-height: 34px; margin-top: 8px; display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--disabled); }
     .status-dot.online { background: var(--accent); }
     .status-spacer { flex: 1; }
-    .offline-reason, .error { margin: 4px 0 10px; color: var(--danger); font-size: 12px; }
+    .offline-reason, .error { margin: 0 0 10px; color: var(--danger); font-size: 12px; }
     details, section { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
     summary, h2 { min-height: 46px; margin: 0; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; }
     summary { cursor: pointer; list-style: none; }
@@ -40,13 +173,96 @@
     .action.close { color: var(--danger); }
     .action:disabled { color: var(--disabled); opacity: .55; }
     .empty { padding: 20px 14px; color: var(--muted); font-size: 13px; }
+    .shortcut-modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+    .modal-backdrop { position: absolute; inset: 0; background: var(--overlay); }
+    .modal-sheet {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 680px);
+      max-height: min(84vh, 720px);
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 18px 18px 0 0;
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+    .modal-header { min-height: 54px; padding: 0 14px 0 18px; display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+    .modal-header h2 { min-height: 0; padding: 0; font-size: 16px; }
+    .modal-close { width: 36px; height: 36px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; background: var(--empty-surface); color: var(--muted); font-size: 22px; }
+    .modal-body { padding: 14px; overflow: auto; overscroll-behavior: contain; }
+    .modal-label { margin: 0 2px 9px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .shortcut-choice-list { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
+    .shortcut-choice {
+      width: 100%;
+      min-height: 55px;
+      padding: 8px 11px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+    }
+    .shortcut-choice:last-child { border-bottom: 0; }
+    .choice-fallback { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 22%; display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 700; }
+    .choice-copy { min-width: 0; }
+    .choice-title, .choice-domain { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .choice-title { font-size: 13px; line-height: 18px; }
+    .choice-domain { color: var(--muted); font-size: 10px; line-height: 15px; }
+    .manual-form { margin-top: 18px; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; margin: 0 2px 5px; color: var(--muted); font-size: 11px; }
+    .field input {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      outline: none;
+    }
+    .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+    .manual-submit { width: 100%; min-height: 44px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 650; }
+    .modal-error { margin: 8px 2px 0; color: var(--danger); font-size: 12px; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #0f0f0f; --card: #191919; --text: #f1f1f1; --muted: #999; --line: #2d2d2d; --accent: #58b978; --danger: #ff776d; --disabled: #666; }
+      :root {
+        --bg: #0f0f10;
+        --card: #1a1a1c;
+        --text: #f1f1f1;
+        --muted: #9a9a9f;
+        --line: #303034;
+        --shortcut-line: rgba(255, 255, 255, .09);
+        --icon-surface: #303034;
+        --empty-surface: #252528;
+        --empty-border: #444449;
+        --accent: #58b978;
+        --danger: #ff776d;
+        --disabled: #666;
+        --overlay: rgba(0, 0, 0, .62);
+        --shadow: 0 -12px 40px rgba(0, 0, 0, .38);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .shortcut-grid.editing .occupied .shortcut-link { animation: none; }
     }
   </style>
 </head>
 <body>
   <main>
+    <div class="shortcut-panel" id="shortcutPanel">
+      <div class="shortcut-heading">
+        <h1>快捷方式</h1>
+        <span class="shortcut-hint" id="shortcutHint">长按图标可删除</span>
+      </div>
+      <div class="shortcut-grid" id="shortcutGrid" aria-label="网页快捷方式"></div>
+    </div>
+
     <div class="status-line">
       <span class="status-dot" id="statusDot"></span>
       <strong id="statusText">读取中</strong>
@@ -67,23 +283,61 @@
       <div class="list" id="openList"></div>
     </section>
   </main>
+
+  <div class="shortcut-modal" id="shortcutModal" role="dialog" aria-modal="true" aria-labelledby="shortcutModalTitle" hidden>
+    <div class="modal-backdrop" data-close-shortcut-modal></div>
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2 id="shortcutModalTitle">添加快捷方式</h2>
+        <button class="modal-close" id="shortcutModalClose" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-label">从当前打开的标签里选</p>
+        <div class="shortcut-choice-list" id="shortcutChoiceList"></div>
+
+        <form class="manual-form" id="manualShortcutForm">
+          <p class="modal-label">或手动输入</p>
+          <div class="field">
+            <label for="shortcutUrl">网址</label>
+            <input id="shortcutUrl" name="url" type="text" inputmode="url" autocomplete="url" autocapitalize="none" spellcheck="false" placeholder="example.com" maxlength="2048" required>
+          </div>
+          <div class="field">
+            <label for="shortcutTitle">站点名（留空则使用域名）</label>
+            <input id="shortcutTitle" name="title" type="text" autocomplete="off" maxlength="100" placeholder="可选">
+          </div>
+          <button class="manual-submit" type="submit">添加到首页</button>
+          <div class="modal-error" id="shortcutModalError" hidden></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
+    const MAX_SHORTCUTS = 10;
     const pending = new Map();
     let currentState = { tabs: [], saved: [], lastSyncTs: null, online: false, pendingCount: 0 };
+    let shortcuts = [];
+    let shortcutEditing = false;
+    let shortcutSaving = false;
+    let addingPosition = null;
 
     function relativeTime(timestamp) {
       if (!timestamp) return '从未同步';
       const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
-      if (seconds < 60) return `${seconds} 秒前`;
+      if (seconds < 60) return String(seconds) + ' 秒前';
       const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes} 分钟前`;
+      if (minutes < 60) return String(minutes) + ' 分钟前';
       const hours = Math.floor(minutes / 60);
-      if (hours < 24) return `${hours} 小时前`;
-      return `${Math.floor(hours / 24)} 天前`;
+      if (hours < 24) return String(hours) + ' 小时前';
+      return String(Math.floor(hours / 24)) + ' 天前';
     }
 
     function domainOf(url) {
       try { return new URL(url).hostname.replace(/^www\./, '') || url; } catch { return url || ''; }
+    }
+
+    function isHttpUrl(url) {
+      try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
     }
 
     function safeImageUrl(url) {
@@ -91,6 +345,261 @@
         const parsed = new URL(url);
         return ['http:', 'https:', 'data:'].includes(parsed.protocol) ? url : '';
       } catch { return ''; }
+    }
+
+    function domainColor(domain) {
+      let hash = 2166136261;
+      for (let index = 0; index < domain.length; index += 1) {
+        hash ^= domain.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return 'hsl(' + String((hash >>> 0) % 360) + ' 48% 44%)';
+    }
+
+    function domainInitial(url) {
+      const domain = domainOf(url);
+      return (domain.match(/[a-z0-9\u4e00-\u9fff]/i) || ['?'])[0].toUpperCase();
+    }
+
+    function makeShortcutIcon(shortcut) {
+      const shell = document.createElement('span');
+      shell.className = 'shortcut-icon-shell';
+
+      const fallback = document.createElement('span');
+      fallback.className = 'shortcut-fallback';
+      fallback.style.backgroundColor = domainColor(domainOf(shortcut.url));
+      fallback.textContent = domainInitial(shortcut.url);
+
+      const image = document.createElement('img');
+      image.className = 'shortcut-icon';
+      image.alt = '';
+      image.hidden = true;
+      image.decoding = 'async';
+      image.src = '/api/icon?u=' + encodeURIComponent(shortcut.url);
+      image.addEventListener('load', function () {
+        fallback.hidden = true;
+        image.hidden = false;
+      });
+      image.addEventListener('error', function () {
+        image.remove();
+        fallback.hidden = false;
+      });
+      shell.append(fallback, image);
+      return shell;
+    }
+
+    function installLongPress(link) {
+      let timer = null;
+      let triggered = false;
+      function cancelTimer() {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+      }
+      link.addEventListener('pointerdown', function (event) {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        triggered = false;
+        cancelTimer();
+        timer = setTimeout(function () {
+          triggered = true;
+          enterShortcutEditMode();
+        }, 520);
+      });
+      link.addEventListener('pointerup', cancelTimer);
+      link.addEventListener('pointercancel', cancelTimer);
+      link.addEventListener('pointerleave', cancelTimer);
+      link.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+      link.addEventListener('dragstart', function (event) { event.preventDefault(); });
+      link.addEventListener('click', function (event) {
+        if (triggered || shortcutEditing) {
+          event.preventDefault();
+          triggered = false;
+        }
+      });
+    }
+
+    function enterShortcutEditMode() {
+      if (shortcutEditing) return;
+      shortcutEditing = true;
+      renderShortcuts();
+    }
+
+    function exitShortcutEditMode() {
+      if (!shortcutEditing) return;
+      shortcutEditing = false;
+      renderShortcuts();
+    }
+
+    function renderShortcuts() {
+      const grid = document.getElementById('shortcutGrid');
+      grid.classList.toggle('editing', shortcutEditing);
+      document.getElementById('shortcutHint').textContent = shortcutEditing ? '轻点角标删除，点空白处完成' : '长按图标可删除';
+      grid.replaceChildren();
+
+      for (let position = 0; position < MAX_SHORTCUTS; position += 1) {
+        const shortcut = shortcuts.find(function (item) { return item.position === position; });
+        const slot = document.createElement('div');
+        slot.className = 'shortcut-slot' + (shortcut ? ' occupied' : '');
+
+        if (shortcut) {
+          const link = document.createElement('a');
+          link.className = 'shortcut-link';
+          link.href = shortcut.url;
+          link.setAttribute('aria-label', '打开 ' + (shortcut.title || domainOf(shortcut.url)));
+          link.append(makeShortcutIcon(shortcut));
+
+          const name = document.createElement('span');
+          name.className = 'shortcut-name';
+          name.textContent = shortcut.title || domainOf(shortcut.url);
+          link.append(name);
+          installLongPress(link);
+
+          const remove = document.createElement('button');
+          remove.className = 'shortcut-delete';
+          remove.type = 'button';
+          remove.textContent = '−';
+          remove.setAttribute('aria-label', '删除 ' + (shortcut.title || domainOf(shortcut.url)));
+          remove.addEventListener('click', function (event) {
+            event.stopPropagation();
+            deleteShortcut(position);
+          });
+          slot.append(link, remove);
+        } else {
+          const add = document.createElement('button');
+          add.className = 'shortcut-add';
+          add.type = 'button';
+          add.setAttribute('aria-label', '在第 ' + String(position + 1) + ' 格添加快捷方式');
+          const shell = document.createElement('span');
+          shell.className = 'shortcut-icon-shell';
+          shell.textContent = '+';
+          const label = document.createElement('span');
+          label.className = 'shortcut-name';
+          label.textContent = '添加';
+          add.append(shell, label);
+          add.addEventListener('click', function () {
+            if (shortcutEditing) {
+              exitShortcutEditMode();
+              return;
+            }
+            openShortcutModal(position);
+          });
+          slot.append(add);
+        }
+        grid.append(slot);
+      }
+    }
+
+    function showShortcutModalError(message) {
+      const error = document.getElementById('shortcutModalError');
+      error.textContent = message || '';
+      error.hidden = !message;
+    }
+
+    function renderShortcutChoices() {
+      const list = document.getElementById('shortcutChoiceList');
+      list.replaceChildren();
+      const seen = new Set();
+      const tabs = currentState.tabs.filter(function (tab) {
+        if (!isHttpUrl(tab.url) || tab.url.length > 2048 || seen.has(tab.url)) return false;
+        seen.add(tab.url);
+        return true;
+      });
+      if (!tabs.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '当前没有可添加的网页标签';
+        list.append(empty);
+        return;
+      }
+
+      for (const tab of tabs) {
+        const choice = document.createElement('button');
+        choice.className = 'shortcut-choice';
+        choice.type = 'button';
+        choice.disabled = shortcutSaving;
+
+        const fallback = document.createElement('span');
+        fallback.className = 'choice-fallback';
+        fallback.style.backgroundColor = domainColor(domainOf(tab.url));
+        fallback.textContent = domainInitial(tab.url);
+
+        const copy = document.createElement('span');
+        copy.className = 'choice-copy';
+        const title = document.createElement('span');
+        title.className = 'choice-title';
+        title.textContent = tab.title || domainOf(tab.url);
+        const domain = document.createElement('span');
+        domain.className = 'choice-domain';
+        domain.textContent = domainOf(tab.url);
+        copy.append(title, domain);
+        choice.append(fallback, copy);
+        choice.addEventListener('click', function () {
+          addShortcut(tab.url, tab.title || domainOf(tab.url));
+        });
+        list.append(choice);
+      }
+    }
+
+    function openShortcutModal(position) {
+      addingPosition = position;
+      showShortcutModalError('');
+      document.getElementById('manualShortcutForm').reset();
+      renderShortcutChoices();
+      document.getElementById('shortcutModal').hidden = false;
+      document.body.classList.add('modal-open');
+      document.getElementById('shortcutModalClose').focus();
+    }
+
+    function closeShortcutModal() {
+      addingPosition = null;
+      document.getElementById('shortcutModal').hidden = true;
+      document.body.classList.remove('modal-open');
+      showShortcutModalError('');
+    }
+
+    async function persistShortcuts(next) {
+      if (shortcutSaving) return false;
+      shortcutSaving = true;
+      try {
+        const response = await fetch('/api/shortcuts', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(next),
+        });
+        const body = await response.json().catch(function () { return {}; });
+        if (response.status === 401) location.reload();
+        if (!response.ok) throw new Error(body.error || '快捷方式保存失败。');
+        shortcuts = body;
+        renderShortcuts();
+        return true;
+      } finally {
+        shortcutSaving = false;
+      }
+    }
+
+    async function addShortcut(url, title) {
+      if (addingPosition === null || shortcutSaving) return;
+      showShortcutModalError('');
+      const next = shortcuts
+        .filter(function (item) { return item.position !== addingPosition; })
+        .concat([{ url: url, title: String(title || '').slice(0, 100), position: addingPosition }])
+        .sort(function (left, right) { return left.position - right.position; });
+      try {
+        if (await persistShortcuts(next)) closeShortcutModal();
+      } catch (error) {
+        showShortcutModalError(error.message);
+        renderShortcutChoices();
+      }
+    }
+
+    async function deleteShortcut(position) {
+      if (shortcutSaving) return;
+      const next = shortcuts.filter(function (item) { return item.position !== position; });
+      try {
+        await persistShortcuts(next);
+        if (!next.length) exitShortcutEditMode();
+      } catch (error) {
+        showError(error.message);
+      }
     }
 
     function makeFavicon(tab) {
@@ -104,11 +613,13 @@
       image.className = 'favicon';
       image.src = source;
       image.alt = '';
-      image.addEventListener('error', () => image.replaceWith(Object.assign(document.createElement('span'), { className: 'favicon-fallback' })));
+      image.addEventListener('error', function () {
+        image.replaceWith(Object.assign(document.createElement('span'), { className: 'favicon-fallback' }));
+      });
       return image;
     }
 
-    function makeCopy(tab, isPending = false) {
+    function makeCopy(tab, isPending) {
       const copy = document.createElement('div');
       copy.className = 'tab-copy';
       const title = document.createElement('div');
@@ -122,7 +633,7 @@
     }
 
     function renderSaved() {
-      const items = currentState.saved.filter(item => !item.dismissed && !item.completed);
+      const items = currentState.saved.filter(function (item) { return !item.dismissed && !item.completed; });
       document.getElementById('savedCount').textContent = String(items.length);
       const list = document.getElementById('savedList');
       list.replaceChildren();
@@ -136,13 +647,15 @@
       for (const item of items) {
         const row = document.createElement('div');
         row.className = 'tab-row';
-        row.append(makeFavicon(item), makeCopy(item));
+        row.append(makeFavicon(item), makeCopy(item, false));
         list.append(row);
       }
     }
 
     function renderOpenTabs() {
-      const tabs = [...currentState.tabs].sort((a, b) => (Number(b.firstSeenTs) || 0) - (Number(a.firstSeenTs) || 0));
+      const tabs = currentState.tabs.slice().sort(function (left, right) {
+        return (Number(right.firstSeenTs) || 0) - (Number(left.firstSeenTs) || 0);
+      });
       document.getElementById('openCount').textContent = String(tabs.length);
       const list = document.getElementById('openList');
       list.replaceChildren();
@@ -157,21 +670,24 @@
       for (const tab of tabs) {
         const isPending = pending.has(tab.id);
         const row = document.createElement('div');
-        row.className = `tab-row${isPending ? ' pending' : ''}`;
+        row.className = 'tab-row' + (isPending ? ' pending' : '');
         row.dataset.tabId = String(tab.id);
         row.append(makeFavicon(tab), makeCopy(tab, isPending));
 
         const actions = document.createElement('div');
         actions.className = 'actions';
-        for (const [type, label, symbol] of [['save', '收藏', '☆'], ['close', '关闭', '×']]) {
+        for (const actionInfo of [['save', '收藏', '☆'], ['close', '关闭', '×']]) {
+          const type = actionInfo[0];
+          const label = actionInfo[1];
+          const symbol = actionInfo[2];
           const button = document.createElement('button');
-          button.className = `action ${type}`;
+          button.className = 'action ' + type;
           button.type = 'button';
           button.textContent = symbol;
-          button.setAttribute('aria-label', `${label} ${tab.title || tab.url || ''}`);
+          button.setAttribute('aria-label', label + ' ' + (tab.title || tab.url || ''));
           button.title = currentState.online ? label : '浏览器离线，无法操作';
           button.disabled = !currentState.online || isPending;
-          button.addEventListener('click', () => submitAction(type, tab));
+          button.addEventListener('click', function () { submitAction(type, tab); });
           actions.append(button);
         }
         row.append(actions);
@@ -183,8 +699,8 @@
       const dot = document.getElementById('statusDot');
       dot.classList.toggle('online', currentState.online);
       document.getElementById('statusText').textContent = currentState.online ? '在线' : '离线';
-      document.getElementById('lastSync').textContent = `· ${relativeTime(currentState.lastSyncTs)}`;
-      document.getElementById('pendingCount').textContent = currentState.pendingCount ? `${currentState.pendingCount} 项待处理` : '';
+      document.getElementById('lastSync').textContent = '· ' + relativeTime(currentState.lastSyncTs);
+      document.getElementById('pendingCount').textContent = currentState.pendingCount ? String(currentState.pendingCount) + ' 项待处理' : '';
       document.getElementById('offlineReason').hidden = currentState.online;
     }
 
@@ -192,12 +708,25 @@
       renderStatus();
       renderSaved();
       renderOpenTabs();
+      if (!document.getElementById('shortcutModal').hidden) renderShortcutChoices();
     }
 
-    function showError(message = '') {
+    function showError(message) {
       const error = document.getElementById('error');
-      error.textContent = message;
+      error.textContent = message || '';
       error.hidden = !message;
+    }
+
+    async function refreshShortcuts() {
+      try {
+        const response = await fetch('/api/shortcuts', { cache: 'no-store' });
+        if (response.status === 401) location.reload();
+        if (!response.ok) throw new Error('无法读取快捷方式。');
+        shortcuts = await response.json();
+        renderShortcuts();
+      } catch (error) {
+        showError(error.message);
+      }
     }
 
     async function refreshState() {
@@ -208,7 +737,7 @@
           throw new Error('无法读取远程状态。');
         }
         currentState = await response.json();
-        const tabIds = new Set(currentState.tabs.map(tab => tab.id));
+        const tabIds = new Set(currentState.tabs.map(function (tab) { return tab.id; }));
         for (const tabId of pending.keys()) {
           if (!tabIds.has(tabId)) pending.delete(tabId);
         }
@@ -227,9 +756,9 @@
         const response = await fetch('/api/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, tabId: tab.id }),
+          body: JSON.stringify({ type: type, tabId: tab.id }),
         });
-        const body = await response.json().catch(() => ({}));
+        const body = await response.json().catch(function () { return {}; });
         if (!response.ok) throw new Error(body.error || '操作提交失败。');
         currentState.pendingCount = body.pendingCount;
         renderStatus();
@@ -241,12 +770,44 @@
       }
     }
 
+    document.getElementById('shortcutModalClose').addEventListener('click', closeShortcutModal);
+    document.querySelector('[data-close-shortcut-modal]').addEventListener('click', closeShortcutModal);
+    document.getElementById('manualShortcutForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      let value = document.getElementById('shortcutUrl').value.trim();
+      if (!/^https?:\/\//i.test(value)) value = 'https://' + value;
+      let parsed;
+      try {
+        parsed = new URL(value);
+      } catch {
+        showShortcutModalError('请输入有效的网址。');
+        return;
+      }
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        showShortcutModalError('只支持 HTTP 或 HTTPS 网址。');
+        return;
+      }
+      const typedTitle = document.getElementById('shortcutTitle').value.trim();
+      addShortcut(parsed.href, typedTitle || domainOf(parsed.href));
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !document.getElementById('shortcutModal').hidden) closeShortcutModal();
+    });
+    document.addEventListener('pointerdown', function (event) {
+      if (shortcutEditing && !event.target.closest('.shortcut-slot')) exitShortcutEditMode();
+    });
+
+    renderShortcuts();
+    refreshShortcuts();
     refreshState();
     setInterval(refreshState, 20_000);
     setInterval(renderStatus, 1_000);
     window.addEventListener('focus', refreshState);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refreshState();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        refreshShortcuts();
+        refreshState();
+      }
     });
   </script>
 </body>

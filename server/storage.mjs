@@ -35,17 +35,20 @@ export class PersistentStore {
     this.dataDir = dataDir;
     this.snapshotPath = path.join(dataDir, 'snapshot.json');
     this.commandsPath = path.join(dataDir, 'commands.json');
+    this.shortcutsPath = path.join(dataDir, 'shortcuts.json');
     this.snapshot = structuredClone(EMPTY_SNAPSHOT);
     this.commands = [];
+    this.shortcuts = [];
     this.waiters = new Set();
     this.mutation = Promise.resolve();
   }
 
   async init() {
     await mkdir(this.dataDir, { recursive: true });
-    const [snapshot, commands] = await Promise.all([
+    const [snapshot, commands, shortcuts] = await Promise.all([
       readJsonOrDefault(this.snapshotPath, EMPTY_SNAPSHOT),
       readJsonOrDefault(this.commandsPath, []),
+      readJsonOrDefault(this.shortcutsPath, []),
     ]);
     this.snapshot = {
       ...structuredClone(EMPTY_SNAPSHOT),
@@ -54,6 +57,7 @@ export class PersistentStore {
       saved: Array.isArray(snapshot?.saved) ? snapshot.saved : [],
     };
     this.commands = Array.isArray(commands) ? commands : [];
+    this.shortcuts = Array.isArray(shortcuts) ? shortcuts : [];
   }
 
   runMutation(callback) {
@@ -94,6 +98,18 @@ export class PersistentStore {
 
   getCommands() {
     return structuredClone(this.commands);
+  }
+
+  getShortcuts() {
+    return structuredClone(this.shortcuts);
+  }
+
+  async replaceShortcuts(shortcuts) {
+    return this.runMutation(async () => {
+      await atomicWriteJson(this.shortcutsPath, shortcuts);
+      this.shortcuts = structuredClone(shortcuts);
+      return this.getShortcuts();
+    });
   }
 
   getState(now = Date.now()) {

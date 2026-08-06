@@ -11,12 +11,16 @@ import {
   verifySessionToken,
 } from './security.mjs';
 import { PersistentStore } from './storage.mjs';
+import { getIconForPage, ICON_CACHE_MAX_AGE_SECONDS } from './icon-proxy.mjs';
 
 export const SESSION_COOKIE_NAME = 'tabout_session';
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const EXTENSION_ROUTES = new Set(['/api/snapshot', '/api/commands', '/api/commands/ack']);
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_SHORTCUTS = 10;
+const MAX_SHORTCUT_URL_LENGTH = 2048;
+const MAX_SHORTCUT_TITLE_LENGTH = 100;
 
 function send(response, status, body, contentType) {
   response.writeHead(status, {
@@ -38,6 +42,28 @@ function sendJson(response, status, body, extraHeaders = {}) {
   response.end(JSON.stringify(body));
 }
 
+function sendIcon(response, icon) {
+  response.writeHead(200, {
+    'Content-Type': icon.contentType,
+    'Content-Length': icon.body.length,
+    'Cache-Control': `public, max-age=${ICON_CACHE_MAX_AGE_SECONDS}`,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Tab-Out-Icon-Cache': icon.cacheHit ? 'HIT' : 'MISS',
+    Vary: 'Cookie',
+  });
+  response.end(icon.body);
+}
+
+function sendAppleTouchIcon(response, body) {
+  response.writeHead(200, {
+    'Content-Type': 'image/png',
+    'Content-Length': body.length,
+    'Cache-Control': `public, max-age=${ICON_CACHE_MAX_AGE_SECONDS}`,
+    'X-Content-Type-Options': 'nosniff',
+  });
+  response.end(body);
+}
+
 async function readJson(request) {
   let size = 0;
   const chunks = [];
@@ -57,6 +83,74 @@ async function readJson(request) {
     error.statusCode = 400;
     throw error;
   }
+}
+
+function validateShortcuts(value) {
+  if (!Array.isArray(value) || value.length > MAX_SHORTCUTS) {
+    throw Object.assign(new Error('快捷方式必须是最多 10 条的列表。'), { statusCode: 400 });
+  }
+
+  const positions = new Set();
+  const shortcuts = value.map(shortcut => {
+    if (!shortcut || typeof shortcut !== 'object' || Array.isArray(shortcut)) {
+      throw Object.assign(new Error('快捷方式格式无效。'), { statusCode: 400 });
+    }
+    if (typeof shortcut.url !== 'string' || !shortcut.url.trim() || shortcut.url.length > MAX_SHORTCUT_URL_LENGTH) {
+      throw Object.assign(new Error('快捷方式 URL 无效或过长。'), { statusCode: 400 });
+    }
+    if (typeof shortcut.title !== 'string' || shortcut.title.length > MAX_SHORTCUT_TITLE_LENGTH) {
+      throw Object.assign(new Error('快捷方式标题无效或过长。'), { statusCode: 400 });
+    }
+    if (!Number.isInteger(shortcut.position) || shortcut.position < 0 || shortcut.position >= MAX_SHORTCUTS || positions.has(shortcut.position)) {
+      throw Object.assign(new Error('快捷方式位置无效或重复。'), { statusCode: 400 });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(shortcut.url.trim());
+    } catch {
+      throw Object.assign(new Error('快捷方式 URL 格式无效。'), { statusCode: 400 });
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw Object.assign(new Error('快捷方式 URL 只支持 HTTP 或 HTTPS。'), { statusCode: 400 });
+    }
+
+    positions.add(shortcut.position);
+    return {
+      url: shortcut.url.trim(),
+      title: shortcut.title.trim(),
+      position: shortcut.position,
+    };
+  });
+
+  return shortcuts.sort((left, right) => left.position - right.position);
+}
+
+function hostOf(value) {
+  try {
+    const parsed = new URL(String(value ?? ''));
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    return parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 目标 host 是否出现在用户自己的数据里——快捷方式、当前打开的标签、稍后再看。
+ * 见 /api/icon 路由处的注释：这是 fake-ip 环境下 SSRF 防护的兜底。
+ */
+function isKnownIconHost(requestedUrl, store, now) {
+  const host = hostOf(requestedUrl);
+  if (!host) return false;
+
+  const state = store.getState(now);
+  const sources = [
+    ...store.getShortcuts(),
+    ...(state.tabs || []),
+    ...(state.saved || []),
+  ];
+  return sources.some(item => hostOf(item?.url) === host);
 }
 
 function getClientIp(request) {
@@ -81,9 +175,10 @@ function extensionAuthorized(request, config) {
 }
 
 export async function createTabOutServer({ config, dataDir, now = () => Date.now(), pages = {} }) {
-  const [loginHtml, mobileHtml] = await Promise.all([
+  const [loginHtml, mobileHtml, appleTouchIcon] = await Promise.all([
     pages.loginHtml ?? readFile(path.join(MODULE_DIR, 'login.html'), 'utf8'),
     pages.mobileHtml ?? readFile(path.join(MODULE_DIR, 'mobile.html'), 'utf8'),
+    pages.appleTouchIcon ?? readFile(path.join(MODULE_DIR, '..', 'extension', 'icons', 'icon128.png')),
   ]);
   const store = new PersistentStore(dataDir);
   await store.init();
@@ -139,6 +234,11 @@ export async function createTabOutServer({ config, dataDir, now = () => Date.now
         sendJson(response, 200, { ok: true }, {
           'Set-Cookie': `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}`,
         });
+        return;
+      }
+
+      if (route === '/apple-touch-icon.png' && request.method === 'GET') {
+        sendAppleTouchIcon(response, appleTouchIcon);
         return;
       }
 
@@ -201,6 +301,43 @@ export async function createTabOutServer({ config, dataDir, now = () => Date.now
 
       if (route === '/api/state' && request.method === 'GET') {
         sendJson(response, 200, store.getState(currentTime));
+        return;
+      }
+
+      if (route === '/api/shortcuts' && request.method === 'GET') {
+        sendJson(response, 200, store.getShortcuts());
+        return;
+      }
+
+      if (route === '/api/shortcuts' && request.method === 'PUT') {
+        const body = await readJson(request);
+        sendJson(response, 200, await store.replaceShortcuts(validateShortcuts(body)));
+        return;
+      }
+
+      if (route === '/api/icon' && request.method === 'GET') {
+        // 只给"已经出现在快捷方式或当前标签快照里"的站点取图标。
+        //
+        // icon-proxy 自己有一整套 SSRF 防护（私网段、IPv6、重定向、DNS 解析后校验），
+        // 但在这台机器上它有个前提不成立：mihomo 开着 fake-ip，把所有域名都解析成
+        // 198.18.x.x —— 包括 github.com。于是"解析后检查 IP"看到的永远是同一个假段，
+        // 一律判为公网放行，真正连去哪由 mihomo 的规则决定，那层防护形同虚设。
+        // 又不能把 198.18/19 直接拉黑，那样正常图标也全取不到。
+        //
+        // 所以在这一层加白名单兜底：目标 host 必须是用户自己已经收藏或打开过的。
+        // 功能上没有损失（图标本来就只服务这两处），但攻击面从"任意 URL"收敛到
+        // "用户自己的浏览记录"，fake-ip 那条路也就没得走了。
+        const requestedUrl = url.searchParams.get('u');
+        if (!isKnownIconHost(requestedUrl, store, currentTime)) {
+          sendJson(response, 403, { error: '只能获取已保存或当前打开的站点图标。' });
+          return;
+        }
+        const icon = await getIconForPage(requestedUrl, dataDir, currentTime);
+        if (!icon) {
+          sendJson(response, 404, { error: '没有找到可用的网站图标。' });
+          return;
+        }
+        sendIcon(response, icon);
         return;
       }
 
