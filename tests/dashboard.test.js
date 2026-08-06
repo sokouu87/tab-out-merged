@@ -35,7 +35,7 @@ function tab(overrides) {
   };
 }
 
-async function loadDashboard({ tabs: initialTabs, deferred = [], settings = {} }) {
+async function loadDashboard({ tabs: initialTabs, deferred = [], recentlyClosed = [], settings = {} }) {
   const html = await readFile(indexPath, 'utf8');
   const sharedSource = await readFile(sharedPath, 'utf8');
   const appSource = await readFile(appPath, 'utf8');
@@ -50,6 +50,7 @@ async function loadDashboard({ tabs: initialTabs, deferred = [], settings = {} }
   dom.window.Date = Date;
 
   let tabs = initialTabs.map(item => ({ ...item }));
+  let closedSessions = recentlyClosed.map(item => structuredClone(item));
   const storage = { deferred, settings };
   const chrome = {
     runtime: { id: 'tab-out-test' },
@@ -65,6 +66,18 @@ async function loadDashboard({ tabs: initialTabs, deferred = [], settings = {} }
     windows: {
       getCurrent: vi.fn(async () => ({ id: 1 })),
       update: vi.fn(async () => {}),
+    },
+    sessions: {
+      getRecentlyClosed: vi.fn((options, callback) => {
+        const result = closedSessions.map(item => structuredClone(item));
+        if (typeof callback === 'function') callback(result);
+        return Promise.resolve(result);
+      }),
+      restore: vi.fn(async sessionId => {
+        closedSessions = closedSessions.filter(item => {
+          return item.tab?.sessionId !== sessionId && item.window?.sessionId !== sessionId;
+        });
+      }),
     },
     storage: {
       local: {
@@ -172,5 +185,53 @@ describe('new tab dashboard seam', () => {
     expect(alphaChip.classList.contains('is-sleeping-tab')).toBe(true);
     expect(alphaChip.classList.contains('is-freed-tab')).toBe(false);
     expect(alphaChip.querySelector('.chip-state-bar').getAttribute('aria-label')).toMatch(/Sleeping tab/i);
+  });
+
+  test('最近关闭显示在 Saved 下方，点击后恢复并刷新列表', async () => {
+    const { chrome, document } = await loadDashboard({
+      tabs: [tab({ id: 1, url: 'https://open.test', title: 'Open' })],
+      deferred: [{
+        id: 'saved-1',
+        url: 'https://saved.test',
+        title: 'Saved item',
+        savedAt: new Date().toISOString(),
+        completed: false,
+        dismissed: false,
+      }],
+      recentlyClosed: [
+        {
+          lastModified: Date.now() - 1_000,
+          tab: {
+            sessionId: 'restore-one',
+            url: 'https://closed-one.test',
+            title: 'Closed one',
+            favIconUrl: '',
+          },
+        },
+        {
+          lastModified: Date.now() - 2_000,
+          tab: {
+            sessionId: 'restore-two',
+            url: 'https://closed-two.test',
+            title: 'Closed two',
+            favIconUrl: '',
+          },
+        },
+      ],
+    });
+
+    const column = document.getElementById('deferredColumn');
+    expect(Array.from(column.children).map(element => element.id)).toEqual([
+      'deferredSavedSection',
+      'recentlyClosedDesktopSection',
+    ]);
+    expect(document.getElementById('recentlyClosedDesktopCount').textContent).toBe('2 items');
+    expect(document.querySelectorAll('#recentlyClosedDesktopList .recently-closed-item')).toHaveLength(2);
+
+    fireEvent.click(within(column).getByRole('button', { name: 'Restore Closed one' }));
+    await flushAsyncWork();
+
+    expect(chrome.sessions.restore).toHaveBeenCalledWith('restore-one');
+    expect(document.querySelectorAll('#recentlyClosedDesktopList .recently-closed-item')).toHaveLength(1);
   });
 });

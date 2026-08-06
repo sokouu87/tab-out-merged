@@ -21,7 +21,7 @@ describe('extension manifest contract', () => {
     const manifest = await readManifest();
 
     expect(manifest.permissions).toEqual(
-      expect.arrayContaining(['tabs', 'activeTab', 'storage', 'system.memory'])
+      expect.arrayContaining(['tabs', 'activeTab', 'storage', 'system.memory', 'sessions'])
     );
     expect(manifest.permissions).not.toContain('processes');
     expect(manifest.permissions).not.toContain('debugger');

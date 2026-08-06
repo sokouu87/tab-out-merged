@@ -168,9 +168,10 @@ async function remoteFetch(url, options, timeoutMs) {
 
 async function buildSnapshot() {
   await firstSeenMutation;
-  const [tabs, stored] = await Promise.all([
+  const [tabs, stored, recentlyClosed] = await Promise.all([
     chrome.tabs.query({}),
     chrome.storage.local.get([FIRST_SEEN_KEY, 'deferred']),
+    shared?.getRecentlyClosedSnapshot ? shared.getRecentlyClosedSnapshot() : [],
   ]);
   const firstSeen = stored[FIRST_SEEN_KEY] || {};
   const now = Date.now();
@@ -188,6 +189,7 @@ async function buildSnapshot() {
       audible: Boolean(tab.audible),
     })),
     saved: Array.isArray(stored.deferred) ? stored.deferred : [],
+    recentlyClosed,
     ts: now,
   };
 }

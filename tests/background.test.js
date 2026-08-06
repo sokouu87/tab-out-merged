@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { URL } from 'node:url';
 
 const backgroundPath = new URL('../extension/background.js', import.meta.url);
+const sharedPath = new URL('../extension/shared.js', import.meta.url);
 
 async function flushPromises() {
   for (let i = 0; i < 30; i += 1) await Promise.resolve();
@@ -12,13 +13,19 @@ async function flushPromises() {
 const EXTENSION_ORIGIN = 'chrome-extension://test-extension-id';
 const DASHBOARD_URL = `${EXTENSION_ORIGIN}/index.html`;
 
-async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [], initialStorage = {} } = {}) {
+async function loadBackgroundWithTabs(initialTabs, {
+  existingDashboardTabs = [],
+  initialStorage = {},
+  recentlyClosed = [],
+  sessionsError = null,
+} = {}) {
   const listeners = {};
   let tabs = initialTabs;
   let dashboardTabs = existingDashboardTabs;
   const storage = { ...initialStorage };
   const chrome = {
     runtime: {
+      lastError: null,
       onInstalled: { addListener: vi.fn(listener => { listeners.onInstalled = listener; }) },
       onStartup: { addListener: vi.fn(listener => { listeners.onStartup = listener; }) },
       getURL: vi.fn(path => `${EXTENSION_ORIGIN}/${path}`),
@@ -35,6 +42,12 @@ async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [],
     },
     windows: {
       update: vi.fn(async () => {}),
+    },
+    sessions: {
+      getRecentlyClosed: vi.fn(async () => {
+        if (sessionsError) throw sessionsError;
+        return recentlyClosed;
+      }),
     },
     action: {
       setBadgeText: vi.fn(async () => {}),
@@ -53,14 +66,20 @@ async function loadBackgroundWithTabs(initialTabs, { existingDashboardTabs = [],
     },
   };
 
-  const source = await readFile(backgroundPath, 'utf8');
-  vm.runInNewContext(source, { chrome, console });
+  const [sharedSource, source] = await Promise.all([
+    readFile(sharedPath, 'utf8'),
+    readFile(backgroundPath, 'utf8'),
+  ]);
+  const context = { chrome, console, setTimeout, clearTimeout, URL };
+  vm.runInNewContext(sharedSource, context);
+  vm.runInNewContext(source, context);
   await flushPromises();
 
   return {
     chrome,
     listeners,
     storage,
+    buildSnapshot: context.buildSnapshot,
     setTabs(nextTabs) {
       tabs = nextTabs;
     },
@@ -126,6 +145,70 @@ describe('tab first-seen tracking', () => {
 
     expect(harness.storage.tabFirstSeen['3']).toEqual(expect.any(Number));
     expect(harness.storage.tabFirstSeen['1']).toBeUndefined();
+  });
+});
+
+describe('recently closed snapshot seam', () => {
+  test('归一化普通标签和关闭窗口首标签，并把查询限制为 25 条', async () => {
+    const closedAt = Date.UTC(2026, 7, 6, 9, 0, 0);
+    const harness = await loadBackgroundWithTabs([webTab(1)], {
+      recentlyClosed: [
+        {
+          lastModified: closedAt,
+          tab: {
+            sessionId: 'tab-session',
+            url: 'https://single.example/article',
+            title: '单个标签',
+            favIconUrl: 'https://single.example/favicon.ico',
+          },
+        },
+        {
+          lastModified: closedAt - 1_000,
+          window: {
+            sessionId: 'window-session',
+            tabs: [
+              { url: 'https://window.example/first', title: '窗口首标签', favIconUrl: '' },
+              { url: 'https://window.example/second', title: '窗口第二个标签', favIconUrl: '' },
+            ],
+          },
+        },
+      ],
+    });
+
+    const snapshot = await harness.buildSnapshot();
+
+    expect(harness.chrome.sessions.getRecentlyClosed).toHaveBeenCalledWith(
+      { maxResults: 25 },
+      expect.any(Function),
+    );
+    expect(snapshot.recentlyClosed).toEqual([
+      {
+        sessionId: 'tab-session',
+        url: 'https://single.example/article',
+        title: '单个标签',
+        favIconUrl: 'https://single.example/favicon.ico',
+        closedAt,
+        kind: 'tab',
+        tabCount: 1,
+      },
+      {
+        sessionId: 'window-session',
+        url: 'https://window.example/first',
+        title: '窗口首标签',
+        favIconUrl: '',
+        closedAt: closedAt - 1_000,
+        kind: 'window',
+        tabCount: 2,
+      },
+    ]);
+  });
+
+  test('sessions API 抛错时降级为空数组而不阻断快照', async () => {
+    const harness = await loadBackgroundWithTabs([webTab(1)], {
+      sessionsError: new Error('Vivaldi sessions unavailable'),
+    });
+
+    await expect(harness.buildSnapshot()).resolves.toMatchObject({ recentlyClosed: [] });
   });
 });
 

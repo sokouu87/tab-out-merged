@@ -13,6 +13,7 @@
   remoteServerUrl: 'http://127.0.0.1:8787',
     extensionKey: '',
   });
+  const MAX_RECENTLY_CLOSED = 25;
 
   function normalizeSettings(settings) {
     const merged = { ...DEFAULT_SETTINGS, ...(settings || {}) };
@@ -55,10 +56,66 @@
     await storage.set({ deferred });
   }
 
+  function normalizeRecentlyClosed(items, now = Date.now()) {
+    if (!Array.isArray(items)) return [];
+
+    const normalized = [];
+    for (const item of items.slice(0, MAX_RECENTLY_CLOSED)) {
+      const isWindow = Boolean(item?.window);
+      const tabs = isWindow && Array.isArray(item.window.tabs) ? item.window.tabs : [];
+      const tab = isWindow ? tabs[0] : item?.tab;
+      const sessionId = isWindow ? (item.window.sessionId || tab?.sessionId) : tab?.sessionId;
+      if (!tab || typeof sessionId !== 'string' || !sessionId) continue;
+
+      normalized.push({
+        sessionId,
+        url: tab.url || '',
+        title: tab.title || tab.url || '',
+        favIconUrl: tab.favIconUrl || '',
+        closedAt: Number.isFinite(item.lastModified) ? item.lastModified : now,
+        kind: isWindow ? 'window' : 'tab',
+        tabCount: isWindow ? Math.max(tabs.length, 1) : 1,
+      });
+    }
+    return normalized;
+  }
+
+  async function getRecentlyClosedSnapshot(sessionsApi = root.chrome?.sessions) {
+    if (!sessionsApi || typeof sessionsApi.getRecentlyClosed !== 'function') return [];
+
+    const items = await new Promise(resolve => {
+      let settled = false;
+      let timer = null;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        resolve(Array.isArray(value) ? value : []);
+      };
+      timer = setTimeout(() => finish([]), 1500);
+
+      try {
+        const result = sessionsApi.getRecentlyClosed({ maxResults: MAX_RECENTLY_CLOSED }, value => {
+          let failed = false;
+          try { failed = Boolean(root.chrome?.runtime?.lastError); } catch {}
+          finish(failed ? [] : value);
+        });
+        if (result && typeof result.then === 'function') result.then(finish).catch(() => finish([]));
+      } catch {
+        finish([]);
+      }
+    });
+
+    return normalizeRecentlyClosed(items);
+  }
+
   root.TabOutShared = {
     DEFAULT_SETTINGS,
+    MAX_RECENTLY_CLOSED,
     getSettings,
+    getRecentlyClosedSnapshot,
     normalizeSettings,
+    normalizeRecentlyClosed,
     saveSettings,
     saveTabForLater,
   };

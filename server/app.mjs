@@ -137,7 +137,7 @@ function hostOf(value) {
 }
 
 /**
- * 目标 host 是否出现在用户自己的数据里——快捷方式、当前打开的标签、稍后再看。
+ * 目标 host 是否出现在用户自己的数据里——快捷方式、当前标签、稍后再看、最近关闭。
  * 见 /api/icon 路由处的注释：这是 fake-ip 环境下 SSRF 防护的兜底。
  */
 function isKnownIconHost(requestedUrl, store, now) {
@@ -149,6 +149,7 @@ function isKnownIconHost(requestedUrl, store, now) {
     ...store.getShortcuts(),
     ...(state.tabs || []),
     ...(state.saved || []),
+    ...(state.recentlyClosed || []),
   ];
   return sources.some(item => hostOf(item?.url) === host);
 }
@@ -250,11 +251,21 @@ export async function createTabOutServer({ config, dataDir, now = () => Date.now
 
         if (route === '/api/snapshot' && request.method === 'POST') {
           const body = await readJson(request);
-          if (!Array.isArray(body.tabs) || !Array.isArray(body.saved) || !Number.isFinite(body.ts)) {
+          if (
+            !Array.isArray(body.tabs)
+            || !Array.isArray(body.saved)
+            || (body.recentlyClosed !== undefined && !Array.isArray(body.recentlyClosed))
+            || !Number.isFinite(body.ts)
+          ) {
             sendJson(response, 400, { error: '快照格式无效。' });
             return;
           }
-          await store.replaceSnapshot({ tabs: body.tabs, saved: body.saved, ts: body.ts }, currentTime);
+          await store.replaceSnapshot({
+            tabs: body.tabs,
+            saved: body.saved,
+            recentlyClosed: body.recentlyClosed || [],
+            ts: body.ts,
+          }, currentTime);
           sendJson(response, 200, { ok: true });
           return;
         }
@@ -316,7 +327,7 @@ export async function createTabOutServer({ config, dataDir, now = () => Date.now
       }
 
       if (route === '/api/icon' && request.method === 'GET') {
-        // 只给"已经出现在快捷方式或当前标签快照里"的站点取图标。
+        // 只给已经出现在快捷方式、当前标签、稍后再看或最近关闭里的站点取图标。
         //
         // icon-proxy 自己有一整套 SSRF 防护（私网段、IPv6、重定向、DNS 解析后校验），
         // 但在这台机器上它有个前提不成立：mihomo 开着 fake-ip，把所有域名都解析成

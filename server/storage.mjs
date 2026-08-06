@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 const EMPTY_SNAPSHOT = Object.freeze({
   tabs: [],
   saved: [],
+  recentlyClosed: [],
   ts: null,
   lastSyncTs: null,
 });
@@ -55,6 +56,7 @@ export class PersistentStore {
       ...(snapshot && typeof snapshot === 'object' ? snapshot : {}),
       tabs: Array.isArray(snapshot?.tabs) ? snapshot.tabs : [],
       saved: Array.isArray(snapshot?.saved) ? snapshot.saved : [],
+      recentlyClosed: Array.isArray(snapshot?.recentlyClosed) ? snapshot.recentlyClosed : [],
     };
     this.commands = Array.isArray(commands) ? commands : [];
     this.shortcuts = Array.isArray(shortcuts) ? shortcuts : [];
@@ -66,9 +68,9 @@ export class PersistentStore {
     return result;
   }
 
-  async replaceSnapshot({ tabs, saved, ts }, receivedAt = Date.now()) {
+  async replaceSnapshot({ tabs, saved, recentlyClosed = [], ts }, receivedAt = Date.now()) {
     return this.runMutation(async () => {
-      const next = { tabs, saved, ts, lastSyncTs: receivedAt };
+      const next = { tabs, saved, recentlyClosed, ts, lastSyncTs: receivedAt };
       await atomicWriteJson(this.snapshotPath, next);
       this.snapshot = next;
       return structuredClone(next);
@@ -117,6 +119,7 @@ export class PersistentStore {
     return {
       tabs: structuredClone(this.snapshot.tabs),
       saved: structuredClone(this.snapshot.saved),
+      recentlyClosed: structuredClone(this.snapshot.recentlyClosed),
       lastSyncTs,
       online: lastSyncTs !== null && now - lastSyncTs >= 0 && now - lastSyncTs < 90_000,
       pendingCount: this.commands.length,

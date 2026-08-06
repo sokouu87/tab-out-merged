@@ -1581,6 +1581,7 @@ function renderDomainCard(group) {
  */
 async function renderDeferredColumn() {
   const column         = document.getElementById('deferredColumn');
+  const savedSection   = document.getElementById('deferredSavedSection');
   const list           = document.getElementById('deferredList');
   const empty          = document.getElementById('deferredEmpty');
   const countEl        = document.getElementById('deferredCount');
@@ -1588,18 +1589,18 @@ async function renderDeferredColumn() {
   const archiveCountEl = document.getElementById('archiveCount');
   const archiveList    = document.getElementById('archiveList');
 
-  if (!column) return;
+  if (!column || !savedSection) return;
 
   try {
     const { active, archived } = await getSavedTabs();
 
-    // Hide the entire column if there's nothing to show
     if (active.length === 0 && archived.length === 0) {
-      column.style.display = 'none';
+      savedSection.style.display = 'none';
+      updateDeferredColumnVisibility();
       return;
     }
 
-    column.style.display = 'block';
+    savedSection.style.display = 'block';
 
     // Render active checklist items
     if (active.length > 0) {
@@ -1622,10 +1623,73 @@ async function renderDeferredColumn() {
       archiveEl.style.display = 'none';
     }
 
+    updateDeferredColumnVisibility();
+
   } catch (err) {
     console.warn('[tab-out] Could not load saved tabs:', err);
-    column.style.display = 'none';
+    savedSection.style.display = 'none';
+    updateDeferredColumnVisibility();
   }
+}
+
+function updateDeferredColumnVisibility() {
+  const column = document.getElementById('deferredColumn');
+  if (!column) return;
+  const hasSaved = document.getElementById('deferredSavedSection')?.style.display !== 'none';
+  const hasRecentlyClosed = document.getElementById('recentlyClosedDesktopSection')?.style.display !== 'none';
+  column.style.display = hasSaved || hasRecentlyClosed ? 'block' : 'none';
+}
+
+function renderRecentlyClosedItem(item) {
+  let domain = '';
+  try { domain = new URL(item.url).hostname.replace(/^www\./, ''); } catch {}
+  const fallbackFavicon = domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=16` : '';
+  const faviconUrl = item.favIconUrl || fallbackFavicon;
+  const tabCount = Number(item.tabCount) > 1 ? ` · ${Number(item.tabCount)} tabs` : '';
+  const title = item.title || item.url || 'Untitled';
+
+  return `
+    <button class="recently-closed-item" type="button" data-action="restore-recently-closed" data-session-id="${escapeHtml(item.sessionId)}" aria-label="Restore ${escapeHtml(title)}">
+      ${faviconUrl ? `<img class="recently-closed-favicon" src="${escapeHtml(faviconUrl)}" alt="" onerror="this.style.visibility='hidden'">` : '<span class="recently-closed-favicon"></span>'}
+      <span class="recently-closed-copy">
+        <span class="recently-closed-title">${escapeHtml(title)}</span>
+        <span class="recently-closed-meta">${escapeHtml(domain)}${domain ? ' · ' : ''}${escapeHtml(timeAgo(item.closedAt))}${escapeHtml(tabCount)}</span>
+      </span>
+    </button>`;
+}
+
+async function renderRecentlyClosedColumn() {
+  const section = document.getElementById('recentlyClosedDesktopSection');
+  const list = document.getElementById('recentlyClosedDesktopList');
+  const count = document.getElementById('recentlyClosedDesktopCount');
+  if (!section || !list || !count) return;
+
+  try {
+    const items = TabOutShared?.getRecentlyClosedSnapshot
+      ? await TabOutShared.getRecentlyClosedSnapshot()
+      : [];
+    if (!items.length) {
+      section.style.display = 'none';
+      list.replaceChildren();
+      count.textContent = '';
+      updateDeferredColumnVisibility();
+      return;
+    }
+
+    section.style.display = 'block';
+    count.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+    list.innerHTML = items.map(renderRecentlyClosedItem).join('');
+    updateDeferredColumnVisibility();
+  } catch (error) {
+    console.warn('[tab-out] Could not load recently closed tabs:', error);
+    section.style.display = 'none';
+    updateDeferredColumnVisibility();
+  }
+}
+
+async function renderRightColumn() {
+  await Promise.all([renderDeferredColumn(), renderRecentlyClosedColumn()]);
+  updateDeferredColumnVisibility();
 }
 
 /**
@@ -2014,13 +2078,13 @@ function configureDashboardRefresh(intervalSeconds) {
 
 async function renderStaticDashboard() {
   const settings = await getSettings();
-  const deferredRender = renderDeferredColumn();
+  const rightColumnRender = renderRightColumn();
   const memoryRender = renderSystemMemoryPanel({ enabled: settings.showSystemMemory });
 
   await refreshOpenTabsDashboard();
   await memoryRender;
   checkTabOutDupes();
-  await deferredRender;
+  await rightColumnRender;
   configureDashboardRefresh(settings.refreshIntervalSeconds);
 }
 
@@ -2043,6 +2107,20 @@ document.addEventListener('click', async (e) => {
   if (!actionEl) return;
 
   const action = actionEl.dataset.action;
+
+  if (action === 'restore-recently-closed') {
+    const sessionId = actionEl.dataset.sessionId;
+    if (!sessionId || !chrome.sessions?.restore) return;
+    try {
+      await chrome.sessions.restore(sessionId);
+      await renderRecentlyClosedColumn();
+      showToast('Tab restored');
+    } catch (error) {
+      console.warn('[tab-out] Could not restore recently closed tab:', error);
+      showToast('Failed to restore tab');
+    }
+    return;
+  }
 
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {

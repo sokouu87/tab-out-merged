@@ -1129,6 +1129,75 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   overflow-y: auto;
 }
 
+.recently-closed-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--warm-gray);
+}
+
+.recently-closed-list {
+  max-height: min(320px, 40vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.recently-closed-item {
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(154, 145, 138, 0.12);
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.recently-closed-item:last-child {
+  border-bottom: 0;
+}
+
+.recently-closed-item:hover {
+  background: rgba(200, 113, 58, 0.05);
+}
+
+.recently-closed-favicon {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  flex: 0 0 16px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+.recently-closed-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.recently-closed-title {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recently-closed-meta {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* On narrow screens, stack vertically */
 @media (max-width: 800px) {
   .dashboard-columns {

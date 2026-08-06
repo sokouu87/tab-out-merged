@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { startTabOutServer } from '../server/app.mjs';
+import { SESSION_COOKIE_NAME, startTabOutServer } from '../server/app.mjs';
 import {
   createPasswordRecord,
   SESSION_MAX_AGE_SECONDS,
@@ -167,6 +167,93 @@ describe('远程查看器 API', () => {
     const getResponse = await fetch(`${baseUrl}/api/shortcuts`, { headers: { Cookie: cookie } });
     expect(getResponse.status).toBe(200);
     expect(await getResponse.json()).toEqual(shortcuts);
+  });
+
+  test('含 recentlyClosed 的快照可以写入并从状态端点读回', async () => {
+    const cookie = await authenticatedCookie();
+    const recentlyClosed = [{
+      sessionId: 'recent-tab-1',
+      url: 'https://recent-only.example/article',
+      title: '刚关闭的文章',
+      favIconUrl: 'https://recent-only.example/favicon.ico',
+      closedAt: Date.now() - 1_000,
+      kind: 'tab',
+      tabCount: 1,
+    }];
+    const snapshotResponse = await fetch(`${baseUrl}/api/snapshot`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TabOut-Key': TEST_EXTENSION_KEY,
+      },
+      body: JSON.stringify({ tabs: [], saved: [], recentlyClosed, ts: Date.now() }),
+    });
+    expect(snapshotResponse.status).toBe(200);
+
+    const stateResponse = await fetch(`${baseUrl}/api/state`, { headers: { Cookie: cookie } });
+    expect(stateResponse.status).toBe(200);
+    expect((await stateResponse.json()).recentlyClosed).toEqual(recentlyClosed);
+  });
+
+  test('旧快照缺少 recentlyClosed 时状态端点仍返回空数组', async () => {
+    const oldTempDir = await mkdtemp(path.join(tmpdir(), 'tab-out-old-snapshot-test-'));
+    const dataDir = path.join(oldTempDir, 'data');
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(path.join(dataDir, 'snapshot.json'), JSON.stringify({
+      tabs: [{ id: 9, url: 'https://old.example', title: '旧快照' }],
+      saved: [],
+      ts: Date.now() - 5_000,
+      lastSyncTs: Date.now() - 5_000,
+    }), 'utf8');
+
+    const oldInstance = await startTabOutServer({
+      config,
+      dataDir,
+      host: '127.0.0.1',
+      port: 0,
+      pages: { loginHtml: '<p>login</p>', mobileHtml: '<p>mobile</p>' },
+    });
+    try {
+      const oldBaseUrl = `http://127.0.0.1:${oldInstance.server.address().port}`;
+      const cookie = `${SESSION_COOKIE_NAME}=${signSessionToken(TEST_USERNAME, TEST_COOKIE_SECRET, Date.now())}`;
+      const response = await fetch(`${oldBaseUrl}/api/state`, { headers: { Cookie: cookie } });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ recentlyClosed: [] });
+    } finally {
+      await new Promise(resolve => oldInstance.server.close(resolve));
+      await rm(oldTempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('图标白名单接受只出现在 recentlyClosed 中的 host，SSRF 防护仍会拦截私网', async () => {
+    const cookie = await authenticatedCookie();
+    const target = 'http://127.0.0.1/recently-closed';
+    const snapshotResponse = await fetch(`${baseUrl}/api/snapshot`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-TabOut-Key': TEST_EXTENSION_KEY,
+      },
+      body: JSON.stringify({
+        tabs: [],
+        saved: [],
+        recentlyClosed: [{
+          sessionId: 'recent-private-host',
+          url: target,
+          title: '白名单来源测试',
+          favIconUrl: '',
+          closedAt: Date.now(),
+        }],
+        ts: Date.now(),
+      }),
+    });
+    expect(snapshotResponse.status).toBe(200);
+
+    const response = await fetch(`${baseUrl}/api/icon?u=${encodeURIComponent(target)}`, {
+      headers: { Cookie: cookie },
+    });
+    expect(response.status).toBe(400);
+    expect(response.status).not.toBe(403);
   });
 
   test('图标端点拒绝没在快捷方式或当前标签里出现过的站点', async () => {

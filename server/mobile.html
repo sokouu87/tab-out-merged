@@ -50,7 +50,7 @@
     .shortcut-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      grid-template-rows: repeat(2, 76px);
+      grid-auto-rows: 76px;
       column-gap: 0;
       row-gap: 10px;
     }
@@ -152,16 +152,15 @@
     .status-dot.online { background: var(--accent); }
     .status-spacer { flex: 1; }
     .offline-reason, .error { margin: 0 0 10px; color: var(--danger); font-size: 12px; }
-    details, section { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
-    summary, h2 { min-height: 46px; margin: 0; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; }
-    summary { cursor: pointer; list-style: none; }
-    summary::-webkit-details-marker { display: none; }
-    summary::after { content: '›'; margin-left: auto; color: var(--muted); transform: rotate(90deg); transition: transform .15s; }
-    details[open] summary::after { transform: rotate(-90deg); }
+    section { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+    h2 { min-height: 46px; margin: 0; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; }
     .count { color: var(--muted); font-size: 12px; font-weight: 500; }
+    .list-toggle { margin-left: auto; padding: 7px 0 7px 8px; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 500; }
     .list { border-top: 1px solid var(--line); }
     .tab-row { min-height: 62px; padding: 9px 10px 9px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); transition: opacity .15s, background .15s; }
     .tab-row:last-child { border-bottom: 0; }
+    .row-link { color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+    .row-link:active { background: var(--empty-surface); }
     .tab-row.pending { opacity: .55; background: color-mix(in srgb, var(--card) 85%, var(--accent)); }
     .favicon { width: 22px; height: 22px; flex: 0 0 22px; object-fit: contain; border-radius: 4px; }
     .favicon-fallback { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; background: var(--line); }
@@ -273,12 +272,17 @@
     <div class="offline-reason" id="offlineReason" hidden>家里的浏览器当前离线，暂时不能操作。</div>
     <div class="error" id="error" hidden></div>
 
-    <details id="savedSection">
-      <summary>Saved for later <span class="count" id="savedCount">0</span></summary>
-      <div class="list" id="savedList"></div>
-    </details>
+    <section id="recentlyClosedSection">
+      <h2>最近关闭 <span class="count" id="recentlyClosedCount">0</span><button class="list-toggle" id="recentlyClosedToggle" type="button" hidden>展开</button></h2>
+      <div class="list" id="recentlyClosedList"></div>
+    </section>
 
-    <section>
+    <section id="savedSection">
+      <h2>Saved for later <span class="count" id="savedCount">0</span><button class="list-toggle" id="savedToggle" type="button" hidden>展开</button></h2>
+      <div class="list" id="savedList"></div>
+    </section>
+
+    <section id="openTabsSection">
       <h2>Open tabs <span class="count" id="openCount">0</span></h2>
       <div class="list" id="openList"></div>
     </section>
@@ -315,11 +319,24 @@
   <script>
     const MAX_SHORTCUTS = 10;
     const pending = new Map();
-    let currentState = { tabs: [], saved: [], lastSyncTs: null, online: false, pendingCount: 0 };
+    let currentState = { tabs: [], saved: [], recentlyClosed: [], lastSyncTs: null, online: false, pendingCount: 0 };
     let shortcuts = [];
     let shortcutEditing = false;
     let shortcutSaving = false;
     let addingPosition = null;
+    let recentlyClosedExpanded = false;
+    let savedExpanded = false;
+
+    function getShortcutGridLayout(shortcutCount) {
+      const count = Math.min(Math.max(Math.trunc(Number(shortcutCount)) || 0, 0), MAX_SHORTCUTS);
+      const showAdd = count < MAX_SHORTCUTS;
+      const slotCount = Math.min(count + (showAdd ? 1 : 0), MAX_SHORTCUTS);
+      return {
+        slotCount: slotCount,
+        rowCount: Math.max(1, Math.ceil(slotCount / 5)),
+        showAdd: showAdd,
+      };
+    }
 
     function relativeTime(timestamp) {
       if (!timestamp) return '从未同步';
@@ -431,16 +448,23 @@
 
     function renderShortcuts() {
       const grid = document.getElementById('shortcutGrid');
+      const orderedShortcuts = shortcuts.slice().sort(function (left, right) { return left.position - right.position; });
+      const layout = getShortcutGridLayout(orderedShortcuts.length);
+      const occupiedPositions = new Set(orderedShortcuts.map(function (item) { return item.position; }));
+      let addPosition = 0;
+      while (occupiedPositions.has(addPosition) && addPosition < MAX_SHORTCUTS) addPosition += 1;
       grid.classList.toggle('editing', shortcutEditing);
+      grid.dataset.rows = String(layout.rowCount);
       document.getElementById('shortcutHint').textContent = shortcutEditing ? '轻点角标删除，点空白处完成' : '长按图标可删除';
       grid.replaceChildren();
 
-      for (let position = 0; position < MAX_SHORTCUTS; position += 1) {
-        const shortcut = shortcuts.find(function (item) { return item.position === position; });
+      for (let displayPosition = 0; displayPosition < layout.slotCount; displayPosition += 1) {
+        const shortcut = orderedShortcuts[displayPosition];
         const slot = document.createElement('div');
         slot.className = 'shortcut-slot' + (shortcut ? ' occupied' : '');
 
         if (shortcut) {
+          const storedPosition = shortcut.position;
           const link = document.createElement('a');
           link.className = 'shortcut-link';
           link.href = shortcut.url;
@@ -460,14 +484,14 @@
           remove.setAttribute('aria-label', '删除 ' + (shortcut.title || domainOf(shortcut.url)));
           remove.addEventListener('click', function (event) {
             event.stopPropagation();
-            deleteShortcut(position);
+            deleteShortcut(storedPosition);
           });
           slot.append(link, remove);
-        } else {
+        } else if (layout.showAdd) {
           const add = document.createElement('button');
           add.className = 'shortcut-add';
           add.type = 'button';
-          add.setAttribute('aria-label', '在第 ' + String(position + 1) + ' 格添加快捷方式');
+          add.setAttribute('aria-label', '添加快捷方式');
           const shell = document.createElement('span');
           shell.className = 'shortcut-icon-shell';
           shell.textContent = '+';
@@ -480,7 +504,7 @@
               exitShortcutEditMode();
               return;
             }
-            openShortcutModal(position);
+            openShortcutModal(addPosition);
           });
           slot.append(add);
         }
@@ -602,8 +626,10 @@
       }
     }
 
-    function makeFavicon(tab) {
-      const source = safeImageUrl(tab.favIconUrl);
+    function makeFavicon(tab, useIconProxy) {
+      const source = useIconProxy && isHttpUrl(tab.url)
+        ? '/api/icon?u=' + encodeURIComponent(tab.url)
+        : safeImageUrl(tab.favIconUrl);
       if (!source) {
         const fallback = document.createElement('span');
         fallback.className = 'favicon-fallback';
@@ -619,7 +645,7 @@
       return image;
     }
 
-    function makeCopy(tab, isPending) {
+    function makeCopy(tab, isPending, metaText) {
       const copy = document.createElement('div');
       copy.className = 'tab-copy';
       const title = document.createElement('div');
@@ -627,14 +653,51 @@
       title.textContent = tab.title || tab.url || 'Untitled';
       const domain = document.createElement('div');
       domain.className = isPending ? 'pending-label' : 'tab-domain';
-      domain.textContent = isPending ? '处理中…' : domainOf(tab.url);
+      domain.textContent = isPending ? '处理中…' : (metaText || domainOf(tab.url));
       copy.append(title, domain);
       return copy;
+    }
+
+    function updateListToggle(toggleId, itemCount, expanded) {
+      const toggle = document.getElementById(toggleId);
+      toggle.hidden = itemCount <= 5;
+      toggle.textContent = expanded ? '收起' : '展开';
+    }
+
+    function renderRecentlyClosed() {
+      const items = Array.isArray(currentState.recentlyClosed) ? currentState.recentlyClosed : [];
+      document.getElementById('recentlyClosedCount').textContent = String(items.length);
+      updateListToggle('recentlyClosedToggle', items.length, recentlyClosedExpanded);
+      const list = document.getElementById('recentlyClosedList');
+      list.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '暂无最近关闭记录';
+        list.append(empty);
+        return;
+      }
+
+      const visibleItems = recentlyClosedExpanded ? items : items.slice(0, 5);
+      for (const item of visibleItems) {
+        const row = document.createElement(isHttpUrl(item.url) ? 'a' : 'div');
+        row.className = 'tab-row row-link';
+        if (row.tagName === 'A') {
+          row.href = item.url;
+          row.target = '_blank';
+          row.rel = 'noopener';
+        }
+        const meta = [domainOf(item.url), relativeTime(item.closedAt)];
+        if (Number(item.tabCount) > 1) meta.push(String(item.tabCount) + ' 个标签');
+        row.append(makeFavicon(item, true), makeCopy(item, false, meta.join(' · ')));
+        list.append(row);
+      }
     }
 
     function renderSaved() {
       const items = currentState.saved.filter(function (item) { return !item.dismissed && !item.completed; });
       document.getElementById('savedCount').textContent = String(items.length);
+      updateListToggle('savedToggle', items.length, savedExpanded);
       const list = document.getElementById('savedList');
       list.replaceChildren();
       if (!items.length) {
@@ -644,7 +707,8 @@
         list.append(empty);
         return;
       }
-      for (const item of items) {
+      const visibleItems = savedExpanded ? items : items.slice(0, 5);
+      for (const item of visibleItems) {
         const row = document.createElement('div');
         row.className = 'tab-row';
         row.append(makeFavicon(item), makeCopy(item, false));
@@ -706,6 +770,7 @@
 
     function render() {
       renderStatus();
+      renderRecentlyClosed();
       renderSaved();
       renderOpenTabs();
       if (!document.getElementById('shortcutModal').hidden) renderShortcutChoices();
@@ -771,6 +836,14 @@
     }
 
     document.getElementById('shortcutModalClose').addEventListener('click', closeShortcutModal);
+    document.getElementById('recentlyClosedToggle').addEventListener('click', function () {
+      recentlyClosedExpanded = !recentlyClosedExpanded;
+      renderRecentlyClosed();
+    });
+    document.getElementById('savedToggle').addEventListener('click', function () {
+      savedExpanded = !savedExpanded;
+      renderSaved();
+    });
     document.querySelector('[data-close-shortcut-modal]').addEventListener('click', closeShortcutModal);
     document.getElementById('manualShortcutForm').addEventListener('submit', function (event) {
       event.preventDefault();
