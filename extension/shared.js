@@ -7,6 +7,7 @@
     tabListItems: [],
     refreshIntervalSeconds: 30,
     showSystemMemory: false,
+    reduceMotion: true,
     remoteSyncEnabled: false,
     // 用 127.0.0.1 而不是 localhost：Windows 上 localhost 先解析到 IPv6 的 ::1，
   // 而服务只监听 127.0.0.1，走 localhost 会连不上。
@@ -24,6 +25,7 @@
       merged.refreshIntervalSeconds = Number(merged.refreshIntervalSeconds);
     }
     merged.showSystemMemory = merged.showSystemMemory === true;
+    merged.reduceMotion = merged.reduceMotion === true;
     merged.remoteSyncEnabled = merged.remoteSyncEnabled === true;
     merged.remoteServerUrl = String(merged.remoteServerUrl || DEFAULT_SETTINGS.remoteServerUrl).trim();
     merged.extensionKey = String(merged.extensionKey || '').trim();

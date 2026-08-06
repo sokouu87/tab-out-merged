@@ -15,6 +15,23 @@
 
 'use strict';
 
+const DEFAULT_SETTINGS = TabOutShared.DEFAULT_SETTINGS;
+let reduceMotionEnabled = DEFAULT_SETTINGS.reduceMotion;
+
+function applyReduceMotion(enabled) {
+  reduceMotionEnabled = enabled === true;
+  document.documentElement.classList.toggle('reduce-motion', reduceMotionEnabled);
+}
+
+function shouldReduceMotion() {
+  if (reduceMotionEnabled) return true;
+  try {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+  } catch {
+    return false;
+  }
+}
+
 
 /* ----------------------------------------------------------------
    CHROME TABS — Direct API Access
@@ -595,6 +612,8 @@ async function dismissSavedTab(id) {
  * A filtered noise sweep that descends in pitch, like air moving.
  */
 function playCloseSound() {
+  if (shouldReduceMotion()) return;
+
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const t = ctx.currentTime;
@@ -644,6 +663,8 @@ function playCloseSound() {
  * Pure CSS + JS, no libraries.
  */
 function shootConfetti(x, y) {
+  if (shouldReduceMotion()) return;
+
   const colors = [
     '#c8713a', // amber
     '#e8a070', // amber light
@@ -718,6 +739,12 @@ function shootConfetti(x, y) {
  */
 function animateCardOut(card) {
   if (!card) return;
+
+  if (shouldReduceMotion()) {
+    card.remove();
+    checkAndShowEmptyState();
+    return;
+  }
 
   const rect = card.getBoundingClientRect();
   shootConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -987,8 +1014,6 @@ const ICONS = {
 /* ----------------------------------------------------------------
    CUSTOM LOGO AND NAV LIST SETTINGS
    ---------------------------------------------------------------- */
-const DEFAULT_SETTINGS = TabOutShared.DEFAULT_SETTINGS;
-
 async function getSettings() {
   try {
     return await TabOutShared.getSettings();
@@ -2101,6 +2126,7 @@ function configureDashboardRefresh(intervalSeconds) {
 
 async function renderStaticDashboard() {
   const settings = await getSettings();
+  applyReduceMotion(settings.reduceMotion);
   const rightColumnRender = renderRightColumn();
   const memoryRender = renderSystemMemoryPanel({ enabled: settings.showSystemMemory });
 
@@ -2528,6 +2554,7 @@ document.addEventListener('keydown', async (e) => {
   const tabListTextarea = document.getElementById('tabListItems');
   const refreshInterval = document.getElementById('refreshInterval');
   const showSystemMemoryToggle = document.getElementById('showSystemMemoryToggle');
+  const reduceMotionToggle = document.getElementById('reduceMotionToggle');
   const remoteSyncToggle = document.getElementById('remoteSyncToggle');
   const remoteServerUrl = document.getElementById('remoteServerUrl');
   const extensionKey = document.getElementById('extensionKey');
@@ -2576,6 +2603,7 @@ document.addEventListener('keydown', async (e) => {
     if (tabListTextarea) tabListTextarea.value = tabListItemsToText(settings.tabListItems);
     if (refreshInterval) refreshInterval.value = String(settings.refreshIntervalSeconds);
     if (showSystemMemoryToggle) showSystemMemoryToggle.checked = settings.showSystemMemory === true;
+    if (reduceMotionToggle) reduceMotionToggle.checked = settings.reduceMotion === true;
     if (remoteSyncToggle) remoteSyncToggle.checked = settings.remoteSyncEnabled === true;
     if (remoteServerUrl) remoteServerUrl.value = settings.remoteServerUrl || DEFAULT_SETTINGS.remoteServerUrl;
     if (extensionKey) extensionKey.value = settings.extensionKey || '';
@@ -2590,12 +2618,14 @@ document.addEventListener('keydown', async (e) => {
       tabListItems: parseTabListItems(tabListTextarea ? tabListTextarea.value : ''),
       refreshIntervalSeconds: refreshInterval ? Number(refreshInterval.value) : 30,
       showSystemMemory: showSystemMemoryToggle ? showSystemMemoryToggle.checked : false,
+      reduceMotion: reduceMotionToggle ? reduceMotionToggle.checked : true,
       remoteSyncEnabled: remoteSyncToggle ? remoteSyncToggle.checked : false,
       remoteServerUrl: remoteServerUrl ? remoteServerUrl.value.trim() : DEFAULT_SETTINGS.remoteServerUrl,
       extensionKey: extensionKey ? extensionKey.value.trim() : '',
     };
     const saved = await saveSettings(next);
     if (!saved) return;
+    applyReduceMotion(saved.reduceMotion);
     applyLogo(saved.logoUrl);
     await renderTabList();
     await renderSystemMemoryPanel({ enabled: saved.showSystemMemory });
@@ -2621,6 +2651,7 @@ document.addEventListener('keydown', async (e) => {
   if (showTabListToggle) showTabListToggle.addEventListener('change', commitSettings);
   if (refreshInterval) refreshInterval.addEventListener('change', commitSettings);
   if (showSystemMemoryToggle) showSystemMemoryToggle.addEventListener('change', commitSettings);
+  if (reduceMotionToggle) reduceMotionToggle.addEventListener('change', commitSettings);
   if (remoteSyncToggle) remoteSyncToggle.addEventListener('change', commitSettings);
   if (tabListTextarea) {
     let inputTimer = null;
@@ -2649,6 +2680,7 @@ document.addEventListener('keydown', async (e) => {
 
   setTimeout(() => {
     loadSettingsIntoUi().then(settings => {
+      applyReduceMotion(settings.reduceMotion);
       applyLogo(settings.logoUrl);
       return renderTabList();
     });

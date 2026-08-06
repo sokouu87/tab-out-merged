@@ -49,6 +49,38 @@ async function loadDashboard({ tabs: initialTabs, deferred = [], recentlyClosed 
   dom.window.clearTimeout = globalThis.clearTimeout;
   dom.window.Date = Date;
 
+  const audioContext = vi.fn(function FakeAudioContext() {
+    const connect = destination => destination;
+    return {
+      currentTime: 0,
+      sampleRate: 48_000,
+      destination: {},
+      createBuffer: vi.fn((channels, length) => ({
+        getChannelData: () => new Float32Array(length),
+      })),
+      createBufferSource: vi.fn(() => ({ connect, start: vi.fn() })),
+      createBiquadFilter: vi.fn(() => ({
+        connect,
+        Q: { value: 0 },
+        frequency: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn(),
+        },
+      })),
+      createGain: vi.fn(() => ({
+        connect,
+        gain: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn(),
+        },
+      })),
+      close: vi.fn(),
+    };
+  });
+  const requestAnimationFrame = vi.fn(() => 1);
+  dom.window.AudioContext = audioContext;
+  dom.window.requestAnimationFrame = requestAnimationFrame;
+
   let tabs = initialTabs.map(item => ({ ...item }));
   let closedSessions = recentlyClosed.map(item => structuredClone(item));
   const storage = { deferred, settings };
@@ -111,6 +143,15 @@ async function loadDashboard({ tabs: initialTabs, deferred = [], recentlyClosed 
   return {
     chrome,
     document: dom.window.document,
+    window: dom.window,
+    effects: {
+      audioContext,
+      requestAnimationFrame,
+      reset() {
+        audioContext.mockClear();
+        requestAnimationFrame.mockClear();
+      },
+    },
     setTabs(nextTabs) {
       tabs = nextTabs.map(item => ({ ...item }));
     },
@@ -118,6 +159,69 @@ async function loadDashboard({ tabs: initialTabs, deferred = [], recentlyClosed 
 }
 
 describe('new tab dashboard seam', () => {
+  test('减少动画默认开启，设置开关默认勾选', async () => {
+    const { document, window } = await loadDashboard({
+      tabs: [tab({ id: 1, url: 'https://alpha.test/article', title: 'Alpha article' })],
+    });
+
+    expect(window.TabOutShared.DEFAULT_SETTINGS.reduceMotion).toBe(true);
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(true);
+
+    fireEvent.click(document.getElementById('settingsBtn'));
+    await flushAsyncWork();
+
+    const toggle = document.getElementById('reduceMotionToggle');
+    expect(toggle.checked).toBe(true);
+
+    toggle.checked = false;
+    fireEvent.change(toggle);
+    await flushAsyncWork();
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(false);
+
+    toggle.checked = true;
+    fireEvent.change(toggle);
+    await flushAsyncWork();
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(true);
+  });
+
+  test('减少动画开启时，关闭最后一个标签不播放效果并从 DOM 移除卡片', async () => {
+    vi.useFakeTimers();
+    const { chrome, document, effects } = await loadDashboard({
+      tabs: [tab({ id: 1, url: 'https://alpha.test/article', title: 'Alpha article' })],
+    });
+    const card = document.querySelector('[data-domain-id="domain-alpha-test"]');
+    effects.reset();
+
+    fireEvent.click(within(card).getByTitle('Close this tab'));
+    await flushAsyncWork();
+    vi.advanceTimersByTime(200);
+    await flushAsyncWork();
+
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(1);
+    expect(effects.audioContext).not.toHaveBeenCalled();
+    expect(effects.requestAnimationFrame).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('[style*="z-index: 9999"]')).toHaveLength(0);
+    expect(document.body.contains(card)).toBe(false);
+  });
+
+  test('关闭减少动画后，关闭标签恢复彩带和音效', async () => {
+    vi.useFakeTimers();
+    const { document, effects } = await loadDashboard({
+      tabs: [tab({ id: 1, url: 'https://alpha.test/article', title: 'Alpha article' })],
+      settings: { reduceMotion: false },
+    });
+    const card = document.querySelector('[data-domain-id="domain-alpha-test"]');
+    effects.reset();
+
+    fireEvent.click(within(card).getByTitle('Close this tab'));
+    await flushAsyncWork();
+
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(false);
+    expect(effects.audioContext).toHaveBeenCalledTimes(1);
+    expect(effects.requestAnimationFrame).toHaveBeenCalledTimes(17);
+    expect(document.querySelectorAll('[style*="z-index: 9999"]')).toHaveLength(17);
+  });
+
   test('renders grouped tabs, saved tabs, and the enabled system memory snapshot', async () => {
     vi.useFakeTimers({ now: new Date('2026-07-05T12:00:00Z') });
     const { document } = await loadDashboard({

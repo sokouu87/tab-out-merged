@@ -1866,3 +1866,19 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
     width: 100%;
   }
 }
+
+/* 设置开关只抑制关键帧动画，保留 hover 和状态反馈的 transition。 */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation: none !important;
+}
+
+/* 系统减少动态效果设置独立生效，不受扩展开关影响。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+  }
+}
