@@ -84,13 +84,15 @@ describe('移动端最近关闭与稍后再看', () => {
     const dom = await loadMobile(0, { recentlyClosed, saved });
     const document = dom.window.document;
 
+    // 手机端把最近关闭放在最后，首屏留给快捷方式和还开着的标签。
+    // 桌面端顺序相反（见 dashboard.test.js），两边是各自独立的页面。
     expect(Array.from(document.querySelectorAll(
       '#shortcutPanel, #recentlyClosedSection, #savedSection, #openTabsSection',
     )).map(element => element.id)).toEqual([
       'shortcutPanel',
-      'recentlyClosedSection',
       'savedSection',
       'openTabsSection',
+      'recentlyClosedSection',
     ]);
     expect(document.getElementById('recentlyClosedCount').textContent).toBe('7');
     expect(document.getElementById('savedCount').textContent).toBe('6');

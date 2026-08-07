@@ -272,11 +272,6 @@
     <div class="offline-reason" id="offlineReason" hidden>家里的浏览器当前离线，暂时不能操作。</div>
     <div class="error" id="error" hidden></div>
 
-    <section id="recentlyClosedSection">
-      <h2>最近关闭 <span class="count" id="recentlyClosedCount">0</span><button class="list-toggle" id="recentlyClosedToggle" type="button" hidden>展开</button></h2>
-      <div class="list" id="recentlyClosedList"></div>
-    </section>
-
     <section id="savedSection">
       <h2>Saved for later <span class="count" id="savedCount">0</span><button class="list-toggle" id="savedToggle" type="button" hidden>展开</button></h2>
       <div class="list" id="savedList"></div>
@@ -285,6 +280,13 @@
     <section id="openTabsSection">
       <h2>Open tabs <span class="count" id="openCount">0</span></h2>
       <div class="list" id="openList"></div>
+    </section>
+
+    <!-- 最近关闭排在最后：手机上首屏优先给快捷方式和还开着的标签，
+         已经关掉的东西翻到底部再看。桌面端相反，那边它在最上方。 -->
+    <section id="recentlyClosedSection">
+      <h2>最近关闭 <span class="count" id="recentlyClosedCount">0</span><button class="list-toggle" id="recentlyClosedToggle" type="button" hidden>展开</button></h2>
+      <div class="list" id="recentlyClosedList"></div>
     </section>
   </main>
 
